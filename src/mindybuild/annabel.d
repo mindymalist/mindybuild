@@ -1044,10 +1044,14 @@ private ValueExpression parseValueExpression(ref Feeder feeder) @safe pure {
 			return parseCallOrVariableExpression(feeder);
 
 		case Type.braceCurlyOpen:
+			return Data(parseObjectLiteralExpression(feeder));
+
 		case Type.braceSquarOpen:
+			return Data(parseArrayLiteralExpression(feeder));
+
 		case Type.literalString:
 		case Type.literalStringEscaped:
-			return Data(parseLiteralExpression(feeder));
+			return Data(parseStringLiteralExpression(feeder));
 
 		default:
 			break;
@@ -1324,7 +1328,7 @@ abstract class LiteralExpression : Expression {
 final class ObjectLiteralExpression : LiteralExpression {
 	public {
 		///
-		ValueExpression[string] properties;
+		ValueExpression[str] properties;
 	}
 
 @safe pure:
@@ -1371,16 +1375,49 @@ final class SelectorExpression : Expression {
 
 	///
 	public override void toString(ref CodePrinter printer) const {
-		foreach (idx, identifier; identifiers) {
-			if (idx > 0) {
-				printer.print(".");
-			}
-			printer.print(identifier);
-		}
+		return this.printSelector(identifiers, printer);
 	}
 
 	///
 	alias toString = typeof(super).toString;
+
+	private static void printSelector(const str[] identifiers, ref CodePrinter printer) {
+		if (identifiers.length == 0) {
+			return;
+		}
+
+		printer.print(identifiers[0]);
+
+		foreach (identifier; identifiers[1 .. $]) {
+			printer.print(".");
+			printer.print(identifier);
+		}
+	}
+
+	private static string selectorToString(const str[] identifiers) {
+		import std.array : appender;
+
+		if (identifiers.length == 0) {
+			return null;
+		}
+
+		auto result = appender!string();
+		size_t total = (() @trusted => identifiers.ptr[0].length)();
+		foreach (identifier; identifiers[1 .. $]) {
+			total += (1 + identifier.length);
+		}
+
+		result.reserve(total);
+
+		result ~= (() @trusted => identifiers.ptr[0])();
+
+		foreach (idx, identifier; identifiers[1 .. $]) {
+			result ~= ".";
+			result ~= identifier;
+		}
+
+		return result[];
+	}
 }
 
 ///
@@ -1425,8 +1462,10 @@ final class ValueExpression : Expression {
 
 	///
 	public alias Data = TaggedUnion!(
+		ArrayLiteralExpression,
 		CallExpression,
-		LiteralExpression,
+		ObjectLiteralExpression,
+		StringLiteralExpression,
 		VariableExpression,
 	);
 
@@ -1443,17 +1482,33 @@ final class ValueExpression : Expression {
 
 	///
 	public override void toString(ref CodePrinter printer) const {
+		if (data.has!ArrayLiteralExpression) {
+			return data.get!ArrayLiteralExpression.toString(printer);
+		}
 		if (data.has!CallExpression) {
 			return data.get!CallExpression.toString(printer);
 		}
-		if (data.has!LiteralExpression) {
-			return data.get!LiteralExpression.toString(printer);
+		if (data.has!ObjectLiteralExpression) {
+			return data.get!ObjectLiteralExpression.toString(printer);
+		}
+		if (data.has!StringLiteralExpression) {
+			return data.get!StringLiteralExpression.toString(printer);
 		}
 		if (data.has!VariableExpression) {
 			return data.get!VariableExpression.toString(printer);
 		}
 
 		assert(false, "ICE: Missing handler for a union type of `ValueExpression`.");
+	}
+
+	public static Data valueToData(Expression value) {
+		static foreach (Type; Data.Types) {
+			if (auto expr = cast(Type) value) {
+				return Data(expr);
+			}
+		}
+
+		assert(false, "ICE: Unsupported data type to be stored in a `ValueExpression`.");
 	}
 
 	///
@@ -1480,4 +1535,314 @@ final class VariableExpression : Expression {
 
 	///
 	alias toString = typeof(super).toString;
+}
+
+///
+final class ExecutionEngine {
+	public {
+		alias Function = LiteralExpression delegate(LiteralExpression[] parameters) @safe;
+	}
+
+	private {
+		ObjectLiteralExpression _data;
+		Function[string] _functions;
+	}
+
+@safe:
+
+	///
+	public void boot() {
+		if (_data !is null) {
+			throw new ExecutionEngineRuntimeException("Execution engine has already been initialized.");
+		}
+
+		_data = new ObjectLiteralExpression();
+	}
+
+	public {
+		///
+		void register(string identifier, Function fun) {
+			if (identifier in _functions) {
+				throw new ExecutionEngineDuplicateIdentifierException(identifier);
+			}
+
+			_functions[identifier] = fun;
+		}
+
+		///
+		void execute(Statement statement) {
+			if (statement.expression is null) {
+				return;
+			}
+
+			if (auto expr = cast(AppendExpression) statement.expression) {
+				return this.execute(expr);
+			}
+			if (auto expr = cast(AssignmentExpression) statement.expression) {
+				return this.execute(expr);
+			}
+			if (auto expr = cast(CallExpression) statement.expression) {
+				return cast(void) this.execute(expr);
+			}
+
+			throw new ExecutionEngineRuntimeCodeException(
+				"Unexpected type of expression for a statement.",
+				statement.expression.location
+			);
+		}
+
+		///
+		ObjectLiteralExpression data() {
+			return _data;
+		}
+	}
+
+	private {
+		void execute(AppendExpression expr) {
+			assert(false);
+		}
+
+		void execute(ArrayLiteralExpression expr) {
+			foreach (item; expr.items) {
+				this.execute(item);
+			}
+		}
+
+		void execute(AssignmentExpression expr) {
+			this.execute(expr.lhs).data = expr.rhs.data;
+		}
+
+		LiteralExpression execute(CallExpression expr) {
+			string getErrorMessage() {
+				return "Cannot call undefined function `" ~ expr.functionName.toString() ~ "`.";
+			}
+
+			if (expr.functionName.identifiers.length != 1) {
+				throw new ExecutionEngineRuntimeCodeException(getErrorMessage(), expr.location);
+			}
+
+			auto callback = expr.functionName.identifiers[0] in _functions;
+
+			if (callback is null) {
+				throw new ExecutionEngineRuntimeCodeException(getErrorMessage(), expr.location);
+			}
+
+			LiteralExpression[] params = null;
+			if (expr.parameters.length > 0) {
+				params = new LiteralExpression[](expr.parameters.length);
+				foreach (idx, ref p; params) {
+					this.execute(expr.parameters[idx], p);
+				}
+			}
+
+			return (*callback)(params);
+		}
+
+		void execute(LiteralExpression expr) {
+			if (auto expression = cast(ArrayLiteralExpression) expr) {
+				return this.execute(expression);
+			}
+			if (auto expression = cast(ObjectLiteralExpression) expr) {
+				return this.execute(expression);
+			}
+			if (auto expression = cast(StringLiteralExpression) expr) {
+				return this.execute(expression);
+			}
+
+			throw new ExecutionEngineRuntimeCodeException("Unexpected type of literal expression.", expr.location);
+		}
+
+		void execute(ObjectLiteralExpression expr) {
+			foreach (property; expr.properties) {
+				this.execute(property);
+			}
+		}
+
+		ValueExpression execute(
+			SelectorExpression expr,
+			size_t idxSelector,
+			ObjectLiteralExpression tree,
+			bool forWriting,
+		) {
+			const identifier = expr.identifiers[idxSelector];
+			auto ptr = identifier in tree.properties;
+
+			if (ptr is null) {
+				if (forWriting) {
+					auto litExpr = new ObjectLiteralExpression();
+					auto valExpr = new ValueExpression();
+					valExpr.data = litExpr;
+					tree.properties[identifier] = valExpr;
+
+					++idxSelector;
+					if (idxSelector == expr.identifiers.length) {
+						return valExpr;
+					}
+
+					return this.execute(expr, idxSelector, litExpr, forWriting);
+				}
+
+				const msg = "Property `"
+					~ SelectorExpression.selectorToString(expr.identifiers[0 .. idxSelector + 1])
+					~ "` not found.";
+				throw new ExecutionEngineRuntimeCodeException(msg, expr.location);
+			}
+
+			++idxSelector;
+			if (idxSelector == expr.identifiers.length) {
+				return *ptr;
+			}
+
+			return this.execute(expr, idxSelector, *ptr, forWriting);
+		}
+
+		ValueExpression execute(
+			SelectorExpression expr,
+			size_t idxSelector,
+			ValueExpression tree,
+			bool forWriting,
+		) {
+			if (!tree.data.has!ObjectLiteralExpression) {
+				const identifier = expr.identifiers[idxSelector];
+				const msg = "Cannot access property `" ~ identifier.idup ~ "` of non-object `"
+					~ SelectorExpression.selectorToString(expr.identifiers[0 .. idxSelector]) ~ "`.";
+				throw new ExecutionEngineRuntimeCodeException(msg, expr.location);
+			}
+
+			return this.execute(expr, idxSelector, tree.data.get!ObjectLiteralExpression, forWriting);
+		}
+
+		ValueExpression execute(SelectorExpression expr) {
+			return this.execute(expr, 0, _data, false);
+		}
+
+		void execute(ValueExpression expr, out LiteralExpression result) {
+			static foreach (Type; ValueExpression.Data.Types) {
+				if (expr.data.has!Type) {
+					static if (is(Type : LiteralExpression)) {
+						auto literal = expr.data.get!Type;
+						this.execute(literal);
+						result = literal;
+					}
+					else {
+						auto next = this.execute(expr.data.get!Type);
+						static if (is(typeof(next) == LiteralExpression)) {
+							result = next;
+						}
+						else {
+							return this.execute(next, result);
+						}
+					}
+				}
+			}
+
+			assert(false, "unreachable");
+		}
+
+		void execute(ValueExpression expr) {
+			static foreach (Type; ValueExpression.Data.Types) {
+				if (expr.data.has!Type) {
+					static if (is(Type : LiteralExpression)) {
+						this.execute(expr.data.get!Type);
+					}
+					else {
+						expr.data = ValueExpression.valueToData(this.execute(expr.data.get!Type));
+					}
+				}
+			}
+		}
+
+		ValueExpression execute(VariableExpression expr) {
+			return this.execute(expr.selector);
+		}
+	}
+}
+
+///
+abstract class ExecutionEngineException : Exception {
+	private this(
+		string message,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow @nogc {
+		super(message, file, line);
+	}
+}
+
+///
+class ExecutionEngineRuntimeException : ExecutionEngineException {
+
+	private this(
+		string message,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow @nogc {
+		super(message, file, line);
+	}
+}
+
+///
+final class ExecutionEngineRuntimeCodeException : ExecutionEngineRuntimeException {
+
+	public {
+		///
+		Location location;
+	}
+
+	private this(
+		string message,
+		Location location,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow @nogc {
+		this.location = location;
+		super(message, file, line);
+	}
+}
+
+///
+final class ExecutionEngineDuplicateIdentifierException : ExecutionEngineException {
+	public {
+		///
+		string identifier;
+	}
+
+	private this(
+		string identifier,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow {
+		this.identifier = identifier;
+		const msg = "Identifier `" ~ identifier ~ "` is already in use.";
+		super(msg, file, line);
+	}
+}
+
+ExecutionEngine.Function wrapFunctions(functions...)() {
+	import std.conv : text;
+	import std.meta;
+	import std.traits;
+
+	enum isLiteralExpression(T) = is(T == LiteralExpression);
+
+	return delegate(LiteralExpression[] engineParams) {
+		foreach (fun; functions) {
+			alias Params = Parameters!fun;
+
+			static assert(is(ReturnType!fun == LiteralExpression));
+			static assert(allSatisfy!(isLiteralExpression, Params));
+
+			enum callParams = () {
+				string result = "";
+				static foreach (idx, Param; Params) {
+					result ~= i"engineParams[$(idx)]".text;
+				}
+				return result;
+			}();
+
+			if (engineParams.length == Params.length) {
+				return fun(mixin(callParams));
+			}
+		}
+
+		throw new ExecutionEngineRuntimeException(
+			text("No suitable overload with `", engineParams.length, "` parameters found."),
+		);
+	};
 }

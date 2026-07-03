@@ -231,7 +231,8 @@ template TaggedUnion(Types...) {
 			}
 
 			///
-			bool tryGet(T)(out T value) @trusted {
+			bool tryGet(T)(out T value) @trusted
+			if (canHold!T) {
 				const doesntHave = !this.has!T();
 				if (doesntHave) {
 					return false;
