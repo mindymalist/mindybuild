@@ -419,20 +419,21 @@ struct Parser {
 @safe pure:
 
 	///
-	public this(str sourceCode, str file = null) nothrow @nogc {
+	public this(str sourceCode, str file = null) {
 		auto lexer = Lexer(sourceCode, file);
 		this(lexer);
 	}
 
 	///
-	public this(Lexer lexer) nothrow @nogc {
+	public this(Lexer lexer) {
 		auto feeder = Feeder(lexer);
 		this(feeder);
 	}
 
-	private this(Feeder feeder) nothrow @nogc {
+	private this(Feeder feeder) {
 		_feeder = feeder;
 		_empty = false;
+		this.popFront();
 	}
 
 	public {
