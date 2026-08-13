@@ -1832,13 +1832,18 @@ ExecutionEngine.Function wrapFunctions(functions...)() {
 			enum callParams = () {
 				string result = "";
 				static foreach (idx, Param; Params) {
-					result ~= i"engineParams[$(idx)]".text;
+					result ~= i"engineParams[$(idx)],".text;
 				}
 				return result;
 			}();
 
 			if (engineParams.length == Params.length) {
-				return fun(mixin(callParams));
+				static if (callParams == "") {
+					return fun();
+				}
+				else {
+					return fun(mixin(callParams));
+				}
 			}
 		}
 
