@@ -365,23 +365,23 @@ ptrdiff_t scanEOL(in str s) @safe pure nothrow @nogc {
 	}
 
 	switch (s[0]) {
-	case '\x0D':
-		return ((s.length >= 2) && (s[1] == '\x0A')) ? 2 : 1;
+		case '\x0D':
+			return ((s.length >= 2) && (s[1] == '\x0A')) ? 2 : 1;
 
-	case '\x0A':
-		return 1;
+		case '\x0A':
+			return 1;
 
-	case '\xE2':
-		if (s.length < 3) {
+		case '\xE2':
+			if (s.length < 3) {
+				return -1;
+			}
+			if (s[1] == '\x80' && (s[2] == '\xA8' || s[2] == '\xA9')) {
+				return 3;
+			}
 			return -1;
-		}
-		if (s[1] == '\x80' && (s[2] == '\xA8' || s[2] == '\xA9')) {
-			return 3;
-		}
-		return -1;
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	return -1;
@@ -586,14 +586,14 @@ ptrdiff_t scanNestableComment(in str input) @safe pure nothrow @nogc {
 ptrdiff_t scanWhitespace(in str input) @safe pure nothrow @nogc {
 	foreach (idx, c; input) {
 		switch (c) {
-		case '\x20':
-		case '\x09':
-		case '\x0B':
-		case '\x0C':
-			continue;
+			case '\x20':
+			case '\x09':
+			case '\x0B':
+			case '\x0C':
+				continue;
 
-		default:
-			return idx;
+			default:
+				return idx;
 		}
 	}
 

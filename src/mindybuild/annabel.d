@@ -137,65 +137,65 @@ struct Lexer {
 			}
 
 			switch (_input[0]) {
-			case '\x20':
-			case '\x09':
-			case '\x0B':
-			case '\x0C':
-				return this.lexWhitespace();
+				case '\x20':
+				case '\x09':
+				case '\x0B':
+				case '\x0C':
+					return this.lexWhitespace();
 
-			case '\x0A':
-			case '\x0D':
-			case '\xE2':
-				return this.lexEOL();
+				case '\x0A':
+				case '\x0D':
+				case '\xE2':
+					return this.lexEOL();
 
-			case '"':
-			case '`':
-				return this.lexLiteralString();
+				case '"':
+				case '`':
+					return this.lexLiteralString();
 
-			case '#':
-				return this.lexHash();
+				case '#':
+					return this.lexHash();
 
-			case '(':
-				return this.makeToken(Type.braceParenOpen, 1);
-			case ')':
-				return this.makeToken(Type.braceParenClose, 1);
-			case '[':
-				return this.makeToken(Type.braceSquarOpen, 1);
-			case ']':
-				return this.makeToken(Type.braceSquarClose, 1);
-			case '{':
-				return this.makeToken(Type.braceCurlyOpen, 1);
-			case '}':
-				return this.makeToken(Type.braceCurlyClose, 1);
+				case '(':
+					return this.makeToken(Type.braceParenOpen, 1);
+				case ')':
+					return this.makeToken(Type.braceParenClose, 1);
+				case '[':
+					return this.makeToken(Type.braceSquarOpen, 1);
+				case ']':
+					return this.makeToken(Type.braceSquarClose, 1);
+				case '{':
+					return this.makeToken(Type.braceCurlyOpen, 1);
+				case '}':
+					return this.makeToken(Type.braceCurlyClose, 1);
 
-			case '+':
-				return this.lexPlus();
+				case '+':
+					return this.lexPlus();
 
-			case '=':
-				return this.makeToken(Type.opAssign, 1);
+				case '=':
+					return this.makeToken(Type.opAssign, 1);
 
-			case ',':
-				return this.makeToken(Type.comma, 1);
+				case ',':
+					return this.makeToken(Type.comma, 1);
 
-			case '.':
-				return this.makeToken(Type.dot, 1);
+				case '.':
+					return this.makeToken(Type.dot, 1);
 
-			case '/':
-				return this.lexSlash();
+				case '/':
+					return this.lexSlash();
 
-			case ':':
-				return this.makeToken(Type.colon, 1);
+				case ':':
+					return this.makeToken(Type.colon, 1);
 
-			case ';':
-				return this.makeToken(Type.semicolon, 1);
+				case ';':
+					return this.makeToken(Type.semicolon, 1);
 
-			case '\x01': .. case '\x08':
-			case '\x0E': .. case '\x1F':
-			case '\x7F':
-				return this.makeToken(Type.invalid, 1);
+				case '\x01': .. case '\x08':
+				case '\x0E': .. case '\x1F':
+				case '\x7F':
+					return this.makeToken(Type.invalid, 1);
 
-			default:
-				return this.lexIdentifier();
+				default:
+					return this.lexIdentifier();
 			}
 		}
 
@@ -286,23 +286,23 @@ struct Lexer {
 			}
 
 			switch (_input[1]) {
-			case '/':
-				const length = scanLineComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '/':
+					const length = scanLineComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			case '+':
-				const length = scanNestableComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '+':
+					const length = scanNestableComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			case '*':
-				const length = scanAsteriskComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '*':
+					const length = scanAsteriskComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			default:
-				return this.makeToken(Type.invalid, 1);
+				default:
+					return this.makeToken(Type.invalid, 1);
 			}
 		}
 
@@ -595,17 +595,17 @@ private Expression parseExpression(ref Feeder feeder) @safe pure {
 	}
 
 	switch (feeder.front.type) {
-	case Type.braceSquarOpen:
-	case Type.braceCurlyOpen:
-	case Type.literalString:
-	case Type.literalStringEscaped:
-		return parseValueExpression(feeder);
+		case Type.braceSquarOpen:
+		case Type.braceCurlyOpen:
+		case Type.literalString:
+		case Type.literalStringEscaped:
+			return parseValueExpression(feeder);
 
-	case Type.identifier:
-		return parseExpressionWithIdentifier(feeder);
+		case Type.identifier:
+			return parseExpressionWithIdentifier(feeder);
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	throw new UnexpectedTokenException(feeder.front, [
@@ -770,17 +770,17 @@ private Expression parseExpressionWithIdentifier(ref Feeder feeder) @safe pure {
 	auto lhs = parseSelectorExpression(feeder);
 
 	switch (feeder.front.type) {
-	case Type.braceParenOpen:
-		return parseCallExpression(feeder, lhs);
+		case Type.braceParenOpen:
+			return parseCallExpression(feeder, lhs);
 
-	case Type.opAppend:
-		return parseAppendExpression(feeder, lhs);
+		case Type.opAppend:
+			return parseAppendExpression(feeder, lhs);
 
-	case Type.opAssign:
-		return parseAssignmentExpression(feeder, lhs);
+		case Type.opAssign:
+			return parseAssignmentExpression(feeder, lhs);
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	throw new UnexpectedTokenException(feeder.front, [
@@ -798,18 +798,18 @@ private LiteralExpression parseLiteralExpression(ref Feeder feeder) @safe pure {
 	}
 
 	switch (feeder.front.type) {
-	case Type.braceCurlyOpen:
-		return parseObjectLiteralExpression(feeder);
+		case Type.braceCurlyOpen:
+			return parseObjectLiteralExpression(feeder);
 
-	case Type.braceSquarOpen:
-		return parseArrayLiteralExpression(feeder);
+		case Type.braceSquarOpen:
+			return parseArrayLiteralExpression(feeder);
 
-	case Type.literalString:
-	case Type.literalStringEscaped:
-		return parseStringLiteralExpression(feeder);
+		case Type.literalString:
+		case Type.literalStringEscaped:
+			return parseStringLiteralExpression(feeder);
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	throw new UnexpectedTokenException(feeder.front, [
@@ -899,30 +899,30 @@ private ObjectLiteralExpression parseObjectLiteralExpression(ref Feeder feeder) 
 
 private string charToEscapeSequence(const char c) @safe pure nothrow @nogc {
 	switch (c) {
-	case '\\':
-		return `\\`;
-	case '\'':
-		return `\'`;
-	case '"':
-		return `\"`;
-	case '\x00':
-		return `\0`;
-	case '\x07':
-		return `\a`;
-	case '\x08':
-		return `\b`;
-	case '\x0C':
-		return `\f`;
-	case '\x0A':
-		return `\n`;
-	case '\x0D':
-		return `\r`;
-	case '\x09':
-		return `\t`;
-	case '\x0B':
-		return `\v`;
-	default:
-		break;
+		case '\\':
+			return `\\`;
+		case '\'':
+			return `\'`;
+		case '"':
+			return `\"`;
+		case '\x00':
+			return `\0`;
+		case '\x07':
+			return `\a`;
+		case '\x08':
+			return `\b`;
+		case '\x0C':
+			return `\f`;
+		case '\x0A':
+			return `\n`;
+		case '\x0D':
+			return `\r`;
+		case '\x09':
+			return `\t`;
+		case '\x0B':
+			return `\v`;
+		default:
+			break;
 	}
 
 	return null;
@@ -933,29 +933,29 @@ private str parseStringLiteral(Token token) @safe pure {
 
 	static char escapeSequenceToChar(char seq1, Location loc) {
 		switch (seq1) {
-		case '\'':
-		case '"':
-		case '?':
-		case '\\':
-			return seq1;
-		case '0':
-			return '\x00';
-		case 'a':
-			return '\x07';
-		case 'b':
-			return '\x08';
-		case 'f':
-			return '\x0C';
-		case 'n':
-			return '\x0A';
-		case 'r':
-			return '\x0D';
-		case 't':
-			return '\x09';
-		case 'v':
-			return '\x0B';
-		default:
-			break;
+			case '\'':
+			case '"':
+			case '?':
+			case '\\':
+				return seq1;
+			case '0':
+				return '\x00';
+			case 'a':
+				return '\x07';
+			case 'b':
+				return '\x08';
+			case 'f':
+				return '\x0C';
+			case 'n':
+				return '\x0A';
+			case 'r':
+				return '\x0D';
+			case 't':
+				return '\x09';
+			case 'v':
+				return '\x0B';
+			default:
+				break;
 		}
 
 		throw new ParserException("Invalid escape sequence `\\" ~ seq1 ~ "` encountered in string literal.", loc);
@@ -1041,21 +1041,21 @@ private ValueExpression parseValueExpression(ref Feeder feeder) @safe pure {
 		}
 
 		switch (feeder.front.type) {
-		case Type.identifier:
-			return parseCallOrVariableExpression(feeder);
+			case Type.identifier:
+				return parseCallOrVariableExpression(feeder);
 
-		case Type.braceCurlyOpen:
-			return Data(parseObjectLiteralExpression(feeder));
+			case Type.braceCurlyOpen:
+				return Data(parseObjectLiteralExpression(feeder));
 
-		case Type.braceSquarOpen:
-			return Data(parseArrayLiteralExpression(feeder));
+			case Type.braceSquarOpen:
+				return Data(parseArrayLiteralExpression(feeder));
 
-		case Type.literalString:
-		case Type.literalStringEscaped:
-			return Data(parseStringLiteralExpression(feeder));
+			case Type.literalString:
+			case Type.literalStringEscaped:
+				return Data(parseStringLiteralExpression(feeder));
 
-		default:
-			break;
+			default:
+				break;
 		}
 
 		throw new UnexpectedTokenException(feeder.front, [

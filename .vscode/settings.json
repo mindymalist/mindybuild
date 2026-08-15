@@ -1,4 +1,5 @@
 {
+    "dfmt.alignSwitchStatements": false,
     "dfmt.braceStyle": "stroustrup",
     "dfmt.templateConstraintStyle": "always_newline",
     "editor.insertSpaces": false,

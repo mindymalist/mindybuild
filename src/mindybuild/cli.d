@@ -45,43 +45,43 @@ template runMindybuildCommandLineApp() {
 		}
 
 		switch (args[0]) {
-		case "build":
-		case "--build":
-		case "-b":
-			return runBuild(stderr, args[1 .. $]);
+			case "build":
+			case "--build":
+			case "-b":
+				return runBuild(stderr, args[1 .. $]);
 
-		case "configure":
-		case "conf":
-		case "--configure":
-		case "--conf":
-		case "-c":
-			return runConfigure(stderr, args[1 .. $]);
+			case "configure":
+			case "conf":
+			case "--configure":
+			case "--conf":
+			case "-c":
+				return runConfigure(stderr, args[1 .. $]);
 
-		case "get-module-name":
-		case "--get-module-name":
-			return runGetModuleName(stdout, stderr, args[1 .. $]);
+			case "get-module-name":
+			case "--get-module-name":
+				return runGetModuleName(stdout, stderr, args[1 .. $]);
 
-		case "lex-bel":
-		case "--lex-bel":
-			return runLexBEL(stdout, stderr, args[1 .. $]);
+			case "lex-bel":
+			case "--lex-bel":
+				return runLexBEL(stdout, stderr, args[1 .. $]);
 
-		case "make":
-		case "--make":
-		case "-m":
-			return runMake(stderr, args[1 .. $]);
+			case "make":
+			case "--make":
+			case "-m":
+				return runMake(stderr, args[1 .. $]);
 
-		case "parse-bel":
-		case "--parse-bel":
-			return runParseBEL(stdout, stderr, args[1 .. $]);
+			case "parse-bel":
+			case "--parse-bel":
+				return runParseBEL(stdout, stderr, args[1 .. $]);
 
-		case "help":
-		case "--help":
-		case "-h":
-			stdout.writeHelp(arg0);
-			return 0;
+			case "help":
+			case "--help":
+			case "-h":
+				stdout.writeHelp(arg0);
+				return 0;
 
-		default:
-			break;
+			default:
+				break;
 		}
 
 		stderr.writeln("Error: Unknown command `", args[0], "`.");

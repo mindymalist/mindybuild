@@ -188,54 +188,54 @@ struct Lexer {
 			}
 
 			switch (_input[0]) {
-			case ' ':
-				return this.lexWhitespace();
+				case ' ':
+					return this.lexWhitespace();
 
-			case 'a': .. case 'z':
-			case 'A': .. case 'Z':
-			case '_':
-				return this.lexIdentifierOrKeyword();
+				case 'a': .. case 'z':
+				case 'A': .. case 'Z':
+				case '_':
+					return this.lexIdentifierOrKeyword();
 
-			case '0': .. case '9':
-				return this.lexLiteralInteger();
+				case '0': .. case '9':
+					return this.lexLiteralInteger();
 
-			case '.':
-				return this.makeToken(Type.dot, 1);
+				case '.':
+					return this.makeToken(Type.dot, 1);
 
-			case ';':
-				return this.makeToken(Type.semicolon, 1);
+				case ';':
+					return this.makeToken(Type.semicolon, 1);
 
-			case ':':
-				return this.makeToken(Type.colon, 1);
+				case ':':
+					return this.makeToken(Type.colon, 1);
 
-			case '/':
-				return this.lexSlash();
+				case '/':
+					return this.lexSlash();
 
-			case '#':
-				return this.lexHash();
+				case '#':
+					return this.lexHash();
 
-			case '@':
-				return this.makeToken(Type.at, 1);
+				case '@':
+					return this.makeToken(Type.at, 1);
 
-			case '(':
-				return this.makeToken(Type.braceParenOpen, 1);
-			case ')':
-				return this.makeToken(Type.braceParenClose, 1);
+				case '(':
+					return this.makeToken(Type.braceParenOpen, 1);
+				case ')':
+					return this.makeToken(Type.braceParenClose, 1);
 
-			case '"':
-			case '`':
-				return this.lexLiteralString();
+				case '"':
+				case '`':
+					return this.lexLiteralString();
 
-			case '\\':
-				return this.lexIdentifierOrKeyword();
+				case '\\':
+					return this.lexIdentifierOrKeyword();
 
-			case '\x0A':
-			case '\x0D':
-			case '\xE2':
-				return this.lexEOL();
+				case '\x0A':
+				case '\x0D':
+				case '\xE2':
+					return this.lexEOL();
 
-			default:
-				return this.lexIdentifierOrKeyword();
+				default:
+					return this.lexIdentifierOrKeyword();
 			}
 		}
 
@@ -255,25 +255,25 @@ struct Lexer {
 
 			const id = _input[0 .. length];
 			switch (id) {
-			case "module":
-				return this.makeToken(Type.module_, length);
+				case "module":
+					return this.makeToken(Type.module_, length);
 
-			case "import":
-				return this.makeToken(Type.somethingElse, length);
+				case "import":
+					return this.makeToken(Type.somethingElse, length);
 
-			case "alias":
-			case "class":
-			case "enum":
-			case "package":
-			case "private":
-			case "protected":
-			case "public":
-			case "struct":
-			case "void":
-				goto case "import";
+				case "alias":
+				case "class":
+				case "enum":
+				case "package":
+				case "private":
+				case "protected":
+				case "public":
+				case "struct":
+				case "void":
+					goto case "import";
 
-			default:
-				break;
+				default:
+					break;
 			}
 
 			return this.makeToken(Type.indentifier, length);
@@ -291,26 +291,26 @@ struct Lexer {
 			}
 
 			switch (_input[1]) {
-			case '/':
-				const length = scanLineComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '/':
+					const length = scanLineComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			case '+':
-				const length = scanNestableComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '+':
+					const length = scanNestableComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			case '*':
-				const length = scanAsteriskComment(_input);
-				assert(length >= 0);
-				return this.makeToken(Type.comment, length);
+				case '*':
+					const length = scanAsteriskComment(_input);
+					assert(length >= 0);
+					return this.makeToken(Type.comment, length);
 
-			case '=':
-				return this.makeToken(Type.somethingElse, 2);
+				case '=':
+					return this.makeToken(Type.somethingElse, 2);
 
-			default:
-				return this.makeToken(Type.somethingElse, 1);
+				default:
+					return this.makeToken(Type.somethingElse, 1);
 			}
 		}
 
