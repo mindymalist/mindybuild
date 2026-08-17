@@ -127,11 +127,14 @@ Statement fallbackRecipe(FallbackRecipeType type) @safe {
 		rhsCall.parameters = [rhsCallParam0Value];
 	}
 	else {
-		assert(false);
+		assert(false, type.to!string());
 	}
 
+	auto rhsArray = new ArrayLiteralExpression();
+	rhsArray.items ~= ValueExpression.pack(rhsCall);
+
 	auto rhsValue = new ValueExpression();
-	rhsValue.data = ValueExpression.Data(rhsCall);
+	rhsValue.data = ValueExpression.Data(rhsArray);
 
 	auto assignment = new AssignmentExpression();
 	assignment.lhs = lhsSelector;
