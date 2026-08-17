@@ -1688,6 +1688,10 @@ final class ExecutionEngine {
 			}
 		}
 
+		void execute(StringLiteralExpression) {
+			return;
+		}
+
 		ValueExpression execute(
 			SelectorExpression expr,
 			size_t idxSelector,
@@ -1753,11 +1757,13 @@ final class ExecutionEngine {
 						auto literal = expr.data.get!Type;
 						this.execute(literal);
 						result = literal;
+						return;
 					}
 					else {
 						auto next = this.execute(expr.data.get!Type);
 						static if (is(typeof(next) == LiteralExpression)) {
 							result = next;
+							return;
 						}
 						else {
 							return this.execute(next, result);
