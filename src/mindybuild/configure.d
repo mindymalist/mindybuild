@@ -290,10 +290,17 @@ Recipe transformRecipe(AbstractRecipe abstractRecipe) @safe {
 			ArrayLiteralExpression dflagsArray;
 			StringLiteralExpression dflagsString;
 			if ((*dflags).data.tryGet(dflagsArray)) {
-				// TODO
+				result.dflags = tryGetArrayOfStrings(dflagsArray, parent.buildPropertyPath("dflags"));
 			}
-			if ((*dflags).data.tryGet(dflagsString)) {
+			else if ((*dflags).data.tryGet(dflagsString)) {
 				result.dflags = splitArgsString(dflagsString.value);
+			}
+			else {
+				throw new BadRecipeValueException(
+					parent.buildPropertyPath("dflags"),
+					"Must be either an array or a string.",
+					dflags.location,
+				);	
 			}
 		}
 	}
@@ -658,6 +665,20 @@ StringLiteralExpression tryGetString(ValueExpression expr, lazy string property)
 		throw new BadRecipeValueException(property, "Must be a string.", expr.location);
 	}
 	return result;
+}
+
+str[] tryGetArrayOfStrings(ArrayLiteralExpression expr, lazy string property) {
+	auto result = new str[](expr.items.length);
+	foreach (idx, item; expr.items) {
+		*(() @trusted => &result.ptr[idx])() = tryGetString(item, property ~ "[" ~ idx.to!string() ~ "]").value;
+	}
+
+	return result;
+}
+
+str[] tryGetArrayOfStrings(ValueExpression expr, lazy string property) {
+	auto arrayExpr = tryGetArray(expr, property);
+	return tryGetArrayOfStrings(arrayExpr, property);
 }
 
 str fileExtensionOf(str filename) {
