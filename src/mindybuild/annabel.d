@@ -1873,12 +1873,7 @@ ExecutionEngine.Function wrapFunctions(functions...)() {
 			}();
 
 			if (engineParams.length == Params.length) {
-				static if (callParams == "") {
-					return fun();
-				}
-				else {
-					return fun(mixin(callParams));
-				}
+				return mixin("fun(" ~ callParams ~ ")");
 			}
 		}
 
