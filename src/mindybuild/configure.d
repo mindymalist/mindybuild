@@ -192,7 +192,131 @@ struct AbstractRecipe {
 	ObjectLiteralExpression data;
 }
 
-Recipe transformRecipe(AbstractRecipe abstractRecipe) {
+Recipe transformRecipe(AbstractRecipe abstractRecipe) @safe {
+	static void transformDC(ValueExpression[str] data, ref Recipe result, lazy string parent) {
+		ValueExpression* dc = "dc" in data;
+		if (dc is null) {
+			return;
+		}
+
+		result.dCompiler = tryGetString(*dc, parent.buildPropertyPath("dc")).value;
+	}
+
+	static void transformInputPaths(ValueExpression[str] data, out InputPaths result, lazy string parent) {
+		ValueExpression* paths = "paths" in data;
+		if (paths is null) {
+			return;
+		}
+
+		ObjectLiteralExpression collection = tryGetObject(*paths, "paths");
+
+		ValueExpression* sourcePaths = "source" in collection.properties;
+		ValueExpression* importPaths = "import" in collection.properties;
+		ValueExpression* stringImportPaths = "string" in collection.properties;
+
+		if (sourcePaths !is null) {
+			auto pathsArray = tryGetArray(*sourcePaths, parent.buildPropertyPath("paths.source")).items;
+			result.source.reserve(pathsArray.length);
+			foreach (idx, path; pathsArray) {
+				result.source ~= tryGetString(path, parent.buildPropertyPath(i"paths.source[$(idx)]".text)).value;
+			}
+		}
+		if (importPaths !is null) {
+			auto pathsArray = tryGetArray(*importPaths, parent.buildPropertyPath("paths.import")).items;
+			result.source.reserve(pathsArray.length);
+			foreach (idx, path; pathsArray) {
+				result.import_ ~= tryGetString(path, parent.buildPropertyPath(i"paths.import[$(idx)]".text)).value;
+			}
+		}
+		if (sourcePaths !is null) {
+			auto pathsArray = tryGetArray(*stringImportPaths, parent.buildPropertyPath("paths.string")).items;
+			result.source.reserve(pathsArray.length);
+			foreach (idx, path; pathsArray) {
+				result.stringImport ~= tryGetString(path, parent.buildPropertyPath(i"paths.string[$(idx)]".text)).value;
+			}
+		}
+	}
+
+	static void transformOutputPaths(ValueExpression[str] data, out OutputPaths result, lazy string parent) {
+		ValueExpression* paths = "paths" in data;
+		if (paths is null) {
+			return;
+		}
+
+		ObjectLiteralExpression collection = tryGetObject(*paths, "paths");
+
+		ValueExpression* prefix = "prefix" in collection.properties;
+		ValueExpression* bin = "bin" in collection.properties;
+		ValueExpression* lib = "lib" in collection.properties;
+
+		if (prefix !is null) {
+			result.prefix = tryGetString(*prefix, parent.buildPropertyPath("paths.prefix")).value;
+		}
+		if (bin !is null) {
+			result.bin = tryGetString(*bin, parent.buildPropertyPath("paths.bin")).value;
+		}
+
+		if (lib !is null) {
+			result.prefix = tryGetString(*lib, parent.buildPropertyPath("paths.lib")).value;
+		}
+	}
+
+	static void transformUnit(ValueExpression[str] data, out BuildUnit result, lazy string parent) {
+		ValueExpression* name = "name" in data;
+		ValueExpression* dc = "dc" in data;
+		ValueExpression* paths = "paths" in data;
+		ValueExpression* dflags = "dflags" in data;
+
+		if (name !is null) {
+			result.name = tryGetString(*name, parent.buildPropertyPath("name")).value;
+		}
+
+		if (paths !is null) {
+			transformInputPaths(data, result.paths.input, parent);
+			transformOutputPaths(data, result.paths.output, parent);
+		}
+
+		if (dc !is null) {
+			result.dCompiler = tryGetString(*dc, parent.buildPropertyPath("dc")).value;
+		}
+
+		if (dflags !is null) {
+			ArrayLiteralExpression dflagsArray;
+			StringLiteralExpression dflagsString;
+			if ((*dflags).data.tryGet(dflagsArray)) {
+				// TODO
+			}
+			if ((*dflags).data.tryGet(dflagsString)) {
+				result.dflags = splitArgsString(dflagsString.value);
+			}
+		}
+	}
+
+	static void transformUnits(ValueExpression[str] data, ref Recipe result) {
+		ValueExpression* units = "units" in data;
+		if (units is null) {
+			return;
+		}
+
+		ArrayLiteralExpression unitsArray = tryGetArray(*units, "units");
+		result.units.reserve(unitsArray.items.length);
+
+		foreach (idx, unit; unitsArray.items) {
+			auto unitData = tryGetObject(unit, i"units[$(idx)]".text).properties;
+
+			BuildUnit buildUnit;
+			transformUnit(unitData, buildUnit, i"units[$(idx)]".text);
+
+			result.units ~= buildUnit;
+		}
+	}
+
+	auto result = Recipe();
+	transformDC(abstractRecipe.data.properties, result, null);
+	transformOutputPaths(abstractRecipe.data.properties, result.paths, null);
+	transformUnits(abstractRecipe.data.properties, result);
+	return result;
+
 	// TODO
 	assert(false, "TODO");
 }

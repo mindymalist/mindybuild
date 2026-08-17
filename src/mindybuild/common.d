@@ -698,3 +698,117 @@ bool contains(H, N)(H haystack, N needle) {
 
 	return false;
 }
+
+///
+ptrdiff_t indexOf(H, N)(H haystack, N needle) {
+	version (LDC) {
+		pragma(inline, true);
+	}
+
+	foreach (idx, item; haystack) {
+		if (item == needle) {
+			return idx;
+		}
+	}
+
+	return -1;
+}
+
+///
+void sliceOffLast(T)(ref T[] data) @trusted pure nothrow @nogc {
+	version (LDC) {
+		pragma(inline, true);
+	}
+
+	if (data.length == 0) {
+		return;
+	}
+
+	const last = -1 + data.length;
+	data = data.ptr[0 .. last];
+}
+
+///
+void removeSplice(T)(ref T[] data, size_t indexOfElementToRemove) @trusted pure nothrow @nogc
+in (indexOfElementToRemove < data.length, "Out of range.") {
+	const last = -1 + data.length;
+
+	if (indexOfElementToRemove < last) {
+		for (size_t idx = indexOfElementToRemove; idx < last; ++idx) {
+			data.ptr[idx] = data.ptr[idx + 1];
+		}
+	}
+
+	sliceOffLast(data);
+}
+
+///
+str[] splitArgsString(str argsString) @safe {
+	import std.array : appender;
+
+	char[] buffer = argsString.dup;
+
+	auto result = appender!(str[]);
+	for (ptrdiff_t cursor = 0; cursor < buffer.length; ++cursor) {
+		const char c = (() @trusted => buffer.ptr[cursor])();
+
+		switch (c) {
+			case '\\':
+				buffer.removeSplice(cursor);
+				++cursor;
+				break;
+
+			case ' ':
+				result ~= (() @trusted => buffer.ptr[0 .. cursor])();
+				buffer = (() @trusted => buffer.ptr[(cursor + 1) .. buffer.length])();
+				break;
+
+			case '\'':
+				buffer.removeSplice(cursor);
+				const restBuffer = (() @trusted => buffer.ptr[cursor .. buffer.length])();
+				auto endOfQuotedString = restBuffer.indexOf('\'');
+				if (endOfQuotedString < 0) {
+					endOfQuotedString = restBuffer.length;
+				}
+				else {
+					buffer.removeSplice(cursor + endOfQuotedString);
+				}
+				break;
+
+			case '"':
+				buffer.removeSplice(cursor);
+
+				for (; cursor < buffer.length; ++cursor) {
+					const cq0 = (() @trusted => buffer.ptr[cursor])();
+
+					if (cq0 == '\"') {
+						buffer.removeSplice(cursor);
+						break;
+					}
+
+					if (cq0 == '\\') {
+						const cursorNext = (cursor + 1);
+						if (cursorNext >= buffer.length) {
+							break;
+						}
+
+						const cq1 = (() @trusted => buffer.ptr[cursorNext])();
+						const specialMeaning = ((cq1 == '\\') || (cq1 == '\"'));
+						if (specialMeaning) {
+							buffer.removeSplice(cursor);
+						}
+					}
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	if (buffer.length > 0) {
+		result ~= buffer;
+	}
+
+	return result[];
+}
