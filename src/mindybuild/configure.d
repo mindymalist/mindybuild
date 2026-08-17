@@ -163,7 +163,7 @@ ExecutionEngine makeEngine() @safe {
 	auto engine = new ExecutionEngine();
 
 	engine.register("autocollect", wrapFunctions!autocollect);
-	engine.register("collect", wrapFunctions!autocollect);
+	engine.register("collect", wrapFunctions!collect);
 	engine.boot();
 
 	return engine;
