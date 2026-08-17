@@ -683,3 +683,18 @@ struct LocationHumanReadable {
 		return text(file, "(", line, ",", column, ")");
 	}
 }
+
+///
+bool contains(H, N)(H haystack, N needle) {
+	version (LDC) {
+		pragma(inline, true);
+	}
+
+	foreach (item; haystack) {
+		if (item == needle) {
+			return true;
+		}
+	}
+
+	return false;
+}

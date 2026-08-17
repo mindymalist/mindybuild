@@ -14,6 +14,8 @@ module mindybuild.configure;
 import mindybuild.annabel;
 import mindybuild.common;
 import mindybuild.kapenparse;
+import std.conv;
+
 import File = std.file;
 
 int run(string[] args) {
@@ -34,10 +36,51 @@ struct Conventions {
 			"dub.json",
 			"dub.sdl",
 		];
+
+		auto stringImportFileExtensions = [
+			".dt",
+		];
+
+		auto stringImportDirectorySentinels = [
+			"dubhash.txt",
+		];
+
+		auto stringImportCommonDirectories = [
+			"views",
+			"strings",
+		];
+
+		auto dSourceFileExtensions = [
+			".d",
+		];
+		auto dImportFileExtensions = [
+			".di",
+		];
+
+		auto cSourceFileExtensions = [
+			".c",
+		];
+		auto cIncludeFileExtensions = [
+			".h",
+			".i",
+		];
+
+		auto objectFileExtensions = [
+			".o",
+			".obj",
+		];
+		auto libraryStaticFileExtensions = [
+			".a",
+			".lib",
+		];
+		auto libraryDynamicFileExtensions = [
+			".so",
+			".dll",
+		];
 	}
 }
 
-AbstractRecipe loadAndAnalyzeRecipe() {
+AbstractRecipe loadAndAnalyzeRecipe() @safe {
 	const runningInProjectRoot = File.exists(Conventions.recipeFilename);
 	if (!runningInProjectRoot) {
 		return analyze(fallbackRecipe(FallbackRecipeType.recipeFileAbsent));
@@ -155,25 +198,37 @@ Recipe transformRecipe(AbstractRecipe abstractRecipe) {
 }
 
 struct Recipe {
-	// dfmt off
-	Paths paths = Paths(
-		prefix: ".",
-		bin: "$(prefix)/bin",
-		lib: "$(prefix)/lib",
-	);
-	// dfmt on
+	OutputPaths paths;
 
 	BuildUnit[] units = null;
-}
-
-struct Paths {
-	str prefix = null;
-	str bin = null;
-	str lib = null;
+	str dCompiler;
 }
 
 struct BuildUnit {
-	Paths paths;
+	str name;
+
+	str[] dflags;
+	str[] lflags;
+
+	BuildPaths paths;
+	str dCompiler;
+}
+
+struct BuildPaths {
+	InputPaths input;
+	OutputPaths output;
+}
+
+struct InputPaths {
+	str[] source;
+	str[] import_;
+	str[] stringImport;
+}
+
+struct OutputPaths {
+	str prefix = ".";
+	str bin = "$(prefix)/bin";
+	str lib = "$(prefix)/lib";
 }
 
 struct ProjectRoot {
@@ -187,10 +242,179 @@ struct ProjectRoot {
 	}
 }
 
+///
+final class BadRecipeParameterException : BadRecipeException {
+	public {
+		///
+		string functionName;
+
+		///
+		size_t index;
+	}
+
+	private this(
+		string functionName,
+		size_t index,
+		string issue,
+		Location location,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow {
+		this.functionName = functionName;
+		this.index = index;
+
+		const msg =
+			"Unsupported value for parameter #" ~ index.to!string ~ " of function `" ~ functionName ~ "`: " ~ issue;
+		super(msg, location, file, line);
+	}
+}
+
+///
+class BadRecipeException : Exception {
+	public {
+		///
+		Location location;
+	}
+
+	private this(
+		string message,
+		Location location,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow @nogc {
+		this.location = location;
+		super(message, file, line);
+	}
+}
+
+///
+final class BadRecipeValueException : BadRecipeException {
+	public {
+		///
+		string property;
+	}
+
+	private this(
+		string property,
+		string issue,
+		Location location,
+		string file = __FILE__, size_t line = __LINE__
+	) @safe pure nothrow {
+		this.property = property;
+
+		const msg = "Unsupported value for property `" ~ property ~ "`: " ~ issue;
+		super(msg, location, file, line);
+	}
+}
+
 @safe:
 
-LiteralExpression collect(LiteralExpression options) {
-	return null;
+LiteralExpression collect(LiteralExpression pathExpr) {
+	import std.array : array;
+	import std.path;
+
+	auto pathStringExpr = cast(StringLiteralExpression) pathExpr;
+	if (pathStringExpr is null) {
+		throw new BadRecipeParameterException("collect", 0, "String expected.", pathExpr.location);
+	}
+
+	const path = (() @trusted => cast(string) pathStringExpr.value)();
+	const pathBaseName = path.asAbsolutePath.asNormalizedPath.array.baseName;
+
+	ValueExpression[] sourceFiles;
+	ValueExpression[] importDirs;
+	ValueExpression[] stringDirs;
+	collectFilesByPurpose(path, sourceFiles, importDirs, stringDirs);
+
+	{
+		auto result = new ObjectLiteralExpression();
+
+		result.properties["name"] = ValueExpression.pack(pathBaseName);
+
+		auto inputPaths = new ObjectLiteralExpression();
+		inputPaths.properties["source"] = ValueExpression.pack(ArrayLiteralExpression.pack(sourceFiles));
+		inputPaths.properties["import"] = ValueExpression.pack(ArrayLiteralExpression.pack(importDirs));
+		inputPaths.properties["string"] = ValueExpression.pack(ArrayLiteralExpression.pack(stringDirs));
+		result.properties["paths"] = ValueExpression.pack(inputPaths);
+
+		return result;
+	}
+}
+
+private void collectFilesByPurpose(
+	string path,
+	ref ValueExpression[] sourceFiles,
+	ref ValueExpression[] importDirs,
+	ref ValueExpression[] stringDirs,
+) @safe {
+	import std.array : array;
+	import std.path;
+
+	bool pathAsImportDirAdded = false;
+	void addPathAsImportDir() {
+		if (pathAsImportDirAdded) {
+			return;
+		}
+
+		importDirs ~= ValueExpression.pack(path);
+		pathAsImportDirAdded = true;
+	}
+
+	bool pathAsStringImportDirAdded = false;
+	void addPathAsStringImportDir() {
+		if (pathAsStringImportDirAdded) {
+			return;
+		}
+
+		stringDirs ~= ValueExpression.pack(path);
+		pathAsStringImportDirAdded = true;
+	}
+
+	const pathBaseName = path.asAbsolutePath.asNormalizedPath.array.baseName;
+	if (Conventions.stringImportCommonDirectories.contains(pathBaseName)) {
+		addPathAsStringImportDir();
+	}
+
+	() @trusted /* ← DMD < 2.114 */ {
+		foreach (file; File.dirEntries(path, File.SpanMode.shallow)) {
+			() @safe {
+				if (file.isFile) {
+					if (file.name.isDSourceFile || file.name.isCSourceFile) {
+						sourceFiles ~= ValueExpression.pack(file.name);
+						addPathAsImportDir();
+						return;
+					}
+
+					if (file.name.isDImportFile || file.name.isCIncludeFile) {
+						addPathAsImportDir();
+						return;
+					}
+
+					if (Conventions.stringImportDirectorySentinels.contains(file.name)) {
+						addPathAsStringImportDir();
+						return;
+					}
+
+					const fileExt = file.name.extension;
+					if (Conventions.stringImportFileExtensions.contains(fileExt)) {
+						addPathAsStringImportDir();
+						return;
+					}
+
+					return;
+				}
+
+				if (file.isDir) {
+					if (file.name == "..") {
+						return;
+					}
+					if (file.name == path) {
+						return;
+					}
+
+					collectFilesByPurpose(file.name, sourceFiles, importDirs, stringDirs);
+				}
+			}();
+		}
+	}();
 }
 
 LiteralExpression autocollect() {
@@ -267,7 +491,75 @@ bool isRoot(str path) {
 		return (cmp(path.asAbsolutePath.asNormalizedPath, "/") == 0);
 	}
 	version (Windows) {
+		import std.array : array;
+
 		const stripped = stripDrive(path.asAbsolutePath.asNormalizedPath.array);
 		return ((stripped == `\`) || (stripped == ""));
 	}
+}
+
+string buildPropertyPath(string parent, string child) {
+	if (parent.length > 0) {
+		return parent ~ "." ~ child;
+	}
+
+	return child;
+}
+
+ArrayLiteralExpression tryGetArray(ValueExpression expr, lazy string property) {
+	ArrayLiteralExpression result;
+	if (!expr.data.tryGet(result)) {
+		throw new BadRecipeValueException(property, "Must be an array.", expr.location);
+	}
+	return result;
+}
+
+ObjectLiteralExpression tryGetObject(ValueExpression expr, lazy string property) {
+	ObjectLiteralExpression result;
+	if (!expr.data.tryGet(result)) {
+		throw new BadRecipeValueException(property, "Must be an object.", expr.location);
+	}
+	return result;
+}
+
+StringLiteralExpression tryGetString(ValueExpression expr, lazy string property) {
+	StringLiteralExpression result;
+	if (!expr.data.tryGet(result)) {
+		throw new BadRecipeValueException(property, "Must be a string.", expr.location);
+	}
+	return result;
+}
+
+str fileExtensionOf(str filename) {
+	import std.path : extension;
+
+	return extension(filename);
+}
+
+bool isDSourceFile(str filename) {
+	return Conventions.dSourceFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isDImportFile(str filename) {
+	return Conventions.dImportFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isCSourceFile(str filename) {
+	return Conventions.cSourceFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isCIncludeFile(str filename) {
+	return Conventions.cIncludeFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isObjectFile(str filename) {
+	return Conventions.objectFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isStaticLibraryFile(str filename) {
+	return Conventions.libraryStaticFileExtensions.contains(fileExtensionOf(filename));
+}
+
+bool isDynamicLibraryFile(str filename) {
+	return Conventions.libraryDynamicFileExtensions.contains(fileExtensionOf(filename));
 }
