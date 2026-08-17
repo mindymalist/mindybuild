@@ -1877,8 +1877,12 @@ ExecutionEngine.Function wrapFunctions(functions...)() {
 			}
 		}
 
+		// dfmt off
 		throw new ExecutionEngineRuntimeException(
-			text("No suitable overload with `", engineParams.length, "` parameters found."),
+			(engineParams.length == 1)
+				? "No suitable overload with one parameter found."
+				: i"No suitable overload with $(engineParams.length) parameters found.".text
 		);
+		// dfmt on
 	};
 }
