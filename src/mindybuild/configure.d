@@ -17,10 +17,13 @@ import mindybuild.kapenparse;
 import std.conv;
 
 import File = std.file;
+import std.stdio : FileHandle = File;
 
-int run(string[] args) {
+int run(FileHandle stderr, string[] args) @safe {
 	auto abstractRecipe = loadAndAnalyzeRecipe();
+	stderr.writeln(abstractRecipe.data, "\n====");
 	auto recipe = transformRecipe(abstractRecipe);
+	stderr.writeln(recipe);
 	return 1;
 }
 

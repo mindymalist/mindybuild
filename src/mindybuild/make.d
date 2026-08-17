@@ -10,3 +10,11 @@
 	mindybuild — Build System
  +/
 module mindybuild.make;
+
+import File = std.file;
+import std.stdio : FileHandle = File;
+
+int run(FileHandle stderr, string[] args) @safe {
+	// TODO
+	assert(false, "Not implemented.");
+}

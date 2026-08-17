@@ -139,7 +139,9 @@ template runMindybuildCommandLineApp() {
 		}
 
 		int runConfigure(File stderr, string[] args) {
-			return 1;
+			static import mindybuild.configure;
+
+			return mindybuild.configure.run(stderr, args);
 		}
 
 		int runGetModuleName(File stdout, File stderr, string[] args) {
@@ -234,7 +236,9 @@ template runMindybuildCommandLineApp() {
 		}
 
 		int runMake(File stderr, string[] args) {
-			return 1;
+			static import mindybuild.make;
+
+			return mindybuild.make.run(stderr, args);
 		}
 
 		int runParseBEL(File stdout, File stderr, string[] args) {
