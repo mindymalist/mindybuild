@@ -1221,6 +1221,13 @@ final class ArrayLiteralExpression : LiteralExpression {
 
 	///
 	alias toString = typeof(super).toString;
+
+	///
+	public static typeof(this) pack(ValueExpression[] values) {
+		auto result = new typeof(this)();
+		result.items = values;
+		return result;
+	}
 }
 
 ///
@@ -1518,6 +1525,19 @@ final class ValueExpression : Expression {
 		}
 
 		assert(false, "ICE: Unsupported data type `" ~ typeid(value).name ~ "` to be stored in a `ValueExpression`.");
+	}
+
+	public static typeof(this) pack(T)(T value)
+	if (Data.canHold!T) {
+		auto result = new ValueExpression();
+		result.data = Data(value);
+		return result;
+	}
+
+	public static typeof(this) pack(str value) {
+		auto childExpr = new StringLiteralExpression();
+		childExpr.value = value;
+		return pack(childExpr);
 	}
 
 	///
