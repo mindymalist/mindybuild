@@ -1503,13 +1503,21 @@ final class ValueExpression : Expression {
 	}
 
 	public static Data valueToData(Expression value) {
+		if (value is null) {
+			assert(false, "ICE: Cannot store `null` in a `ValueExpression`.");
+		}
+
+		if (auto ve = cast(ValueExpression) value) {
+			return ve.data;
+		}
+
 		static foreach (Type; Data.Types) {
 			if (auto expr = cast(Type) value) {
 				return Data(expr);
 			}
 		}
 
-		assert(false, "ICE: Unsupported data type to be stored in a `ValueExpression`.");
+		assert(false, "ICE: Unsupported data type `" ~ typeid(value).name ~ "` to be stored in a `ValueExpression`.");
 	}
 
 	///
