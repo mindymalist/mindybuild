@@ -1638,7 +1638,8 @@ final class ExecutionEngine {
 		}
 
 		void execute(AssignmentExpression expr) {
-			this.execute(expr.lhs).data = expr.rhs.data;
+			this.execute(expr.rhs);
+			this.execute(expr.lhs, true).data = expr.rhs.data;
 		}
 
 		LiteralExpression execute(CallExpression expr) {
@@ -1741,8 +1742,8 @@ final class ExecutionEngine {
 			return this.execute(expr, idxSelector, tree.data.get!ObjectLiteralExpression, forWriting);
 		}
 
-		ValueExpression execute(SelectorExpression expr) {
-			return this.execute(expr, 0, _data, false);
+		ValueExpression execute(SelectorExpression expr, bool forWriting = false) {
+			return this.execute(expr, 0, _data, forWriting);
 		}
 
 		void execute(ValueExpression expr, out LiteralExpression result) {
