@@ -759,19 +759,25 @@ str[] splitArgsString(str argsString) @safe {
 				break;
 
 			case ' ':
+			case '\t':
+			case '\u000B':
+			case '\u000C':
 				result ~= (() @trusted => buffer.ptr[0 .. cursor])();
 				buffer = (() @trusted => buffer.ptr[(cursor + 1) .. buffer.length])();
+				cursor = -1;
 				break;
 
 			case '\'':
 				buffer.removeSplice(cursor);
-				const restBuffer = (() @trusted => buffer.ptr[cursor .. buffer.length])();
-				auto endOfQuotedString = restBuffer.indexOf('\'');
-				if (endOfQuotedString < 0) {
-					endOfQuotedString = restBuffer.length;
-				}
-				else {
-					buffer.removeSplice(cursor + endOfQuotedString);
+
+				for (; cursor < buffer.length; ++cursor) {
+					const cq0 = (() @trusted => buffer.ptr[cursor])();
+
+					if (cq0 == '\'') {
+						buffer.removeSplice(cursor);
+						--cursor;
+						break;
+					}
 				}
 				break;
 
@@ -783,6 +789,7 @@ str[] splitArgsString(str argsString) @safe {
 
 					if (cq0 == '\"') {
 						buffer.removeSplice(cursor);
+						--cursor;
 						break;
 					}
 
