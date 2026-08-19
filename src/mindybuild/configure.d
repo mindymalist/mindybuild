@@ -555,6 +555,18 @@ private void collectFilesByPurpose(
 }
 
 LiteralExpression autocollect() {
+	/+
+		TODO: replace with something else.
+
+		`autocollect()` is nonsense as-is.
+
+		mindybuild is supposed to find a recipe file in parent directories and load it.
+		Currently, this is part of the autocollect-ion process.
+		Would a recipe file contain an `autocollect()` call, that recipe would load itself recursively again and again.
+
+		Furthermore, the current implementation does not even attempt to load the found recipe file;
+		instead it runs `collect(".")` from within the directory that contains the recipe.
+	 +/
 	const target = determineAutocollectTarget();
 	auto cwd = new StringLiteralExpression();
 	cwd.value = ".";
