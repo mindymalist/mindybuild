@@ -565,7 +565,7 @@ LiteralExpression autocollect() {
 }
 
 private str determineAutocollectTarget() {
-	const recipeDir = findProjectDir(".");
+	const recipeDir = findRecipeDir(".");
 	if (recipeDir !is null) {
 		return recipeDir;
 	}
