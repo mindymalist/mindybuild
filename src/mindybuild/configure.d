@@ -555,9 +555,13 @@ private void collectFilesByPurpose(
 }
 
 LiteralExpression autocollect() {
-	auto target = new StringLiteralExpression();
-	target.value = determineAutocollectTarget();
-	return collect(target);
+	const target = determineAutocollectTarget();
+	auto cwd = new StringLiteralExpression();
+	cwd.value = ".";
+
+	File.chdir(target);
+
+	return collect(cwd);
 }
 
 private str determineAutocollectTarget() {
