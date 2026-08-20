@@ -469,6 +469,34 @@ ptrdiff_t scanIdentifier(scope str input) @safe pure nothrow @nogc {
 	return originalLength;
 }
 
+ptrdiff_t scanInteger(in str input) @safe pure nothrow @nogc {
+	import std.ascii : isDigit;
+
+	const isNegative = (input[0] == '-');
+
+	if (isNegative && (input.length < 2)) {
+		return -1;
+	}
+
+	const offset = (isNegative) ? 1 : 0;
+	foreach (idx, c; input[offset .. $]) {
+		if (c == '.') {
+			return -1;
+		}
+
+		if (!c.isDigit) {
+			if (c != '_') {
+				return (offset + idx);
+			}
+			if (idx == 0) {
+				return -1;
+			}
+		}
+	}
+
+	return input.length;
+}
+
 ///
 ptrdiff_t scanUniversalCharacterName(in str input) @safe pure nothrow @nogc {
 	import std.ascii : isHexDigit;

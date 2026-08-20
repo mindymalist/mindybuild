@@ -45,6 +45,7 @@ struct Token {
 		opAppend = 'a',
 
 		identifier = 'i',
+		literalInteger = '0',
 		literalString = '`',
 		literalStringEscaped = '"',
 
@@ -189,7 +190,11 @@ struct Lexer {
 				case ';':
 					return this.makeToken(Type.semicolon, 1);
 
-				case '\x01': .. case '\x08':
+				case '0': .. case '9':
+				case '-':
+					return this.lexLiteralInteger();
+
+				case '\x00': .. case '\x08':
 				case '\x0E': .. case '\x1F':
 				case '\x7F':
 					return this.makeToken(Type.invalid, 1);
@@ -225,6 +230,15 @@ struct Lexer {
 			}
 
 			return this.makeToken(Type.eol, length);
+		}
+
+		Token lexLiteralInteger() {
+			const length = scanInteger(_input);
+			if (length < 0) {
+				return this.makeToken(Type.invalid, _input.length);
+			}
+
+			return this.makeToken(Type.literalInteger, length);
 		}
 
 		Token lexLiteralString() {
