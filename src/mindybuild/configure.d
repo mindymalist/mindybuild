@@ -311,7 +311,7 @@ Recipe transformRecipe(AbstractRecipe abstractRecipe) @safe {
 					parent.buildPropertyPath("dflags"),
 					"Must be either an array or a string.",
 					dflags.location,
-				);	
+				);
 			}
 		}
 	}
