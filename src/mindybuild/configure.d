@@ -84,17 +84,38 @@ struct Conventions {
 }
 
 AbstractRecipe loadAndAnalyzeRecipe() @safe {
-	const runningInProjectRoot = File.exists(Conventions.recipeFilename);
-	if (!runningInProjectRoot) {
-		return analyze(fallbackRecipe(FallbackRecipeType.recipeFileAbsent));
+	static auto impl(int counter) {
+		const runningInProjectRoot = File.exists(Conventions.recipeFilename);
+		if (runningInProjectRoot) {
+			auto document = loadDocument(Conventions.recipeFilename);
+
+			if (document.statements.length == 0) {
+				return analyze(fallbackRecipe);
+			}
+
+			return analyze(document);
+		}
+
+		const recipeDir = findRecipeDir(".");
+		if (recipeDir !is null) {
+			File.chdir(recipeDir);
+
+			++counter;
+			if (counter >= 3) {
+				throw new Exception("Unable to load project: Filesystem seemingly keeps changing.");
+			}
+			return impl(counter);
+		}
+
+		const projectDir = findProjectDir(".");
+		if (projectDir !is null) {
+			File.chdir(recipeDir);
+		}
+
+		return analyze(fallbackRecipe);
 	}
 
-	auto document = loadDocument(Conventions.recipeFilename);
-	if (document.statements.length == 0) {
-		return analyze(fallbackRecipe(FallbackRecipeType.recipeFileEmpty));
-	}
-
-	return analyze(document);
+	return impl(0);
 }
 
 Document loadDocument(str path) @safe {
@@ -108,7 +129,7 @@ enum FallbackRecipeType {
 	recipeFileEmpty,
 }
 
-Statement fallbackRecipe(FallbackRecipeType type) @safe {
+Statement fallbackRecipe() @safe {
 	auto lhsSelector = new SelectorExpression();
 	lhsSelector.identifiers = ["units"];
 
@@ -117,21 +138,12 @@ Statement fallbackRecipe(FallbackRecipeType type) @safe {
 	auto rhsCall = new CallExpression();
 	rhsCall.functionName = rhsSelector;
 
-	if (type == FallbackRecipeType.recipeFileAbsent) {
-		rhsSelector.identifiers = ["autocollect"];
-		rhsCall.parameters = [];
-	}
-	else if (type == FallbackRecipeType.recipeFileEmpty) {
-		rhsSelector.identifiers = ["collect"];
-		auto rhsCallParam0 = new StringLiteralExpression();
-		rhsCallParam0.value = ".";
-		auto rhsCallParam0Value = new ValueExpression();
-		rhsCallParam0Value.data = ValueExpression.Data(rhsCallParam0);
-		rhsCall.parameters = [rhsCallParam0Value];
-	}
-	else {
-		assert(false, type.to!string());
-	}
+	rhsSelector.identifiers = ["collect"];
+	auto rhsCallParam0 = new StringLiteralExpression();
+	rhsCallParam0.value = ".";
+	auto rhsCallParam0Value = new ValueExpression();
+	rhsCallParam0Value.data = ValueExpression.Data(rhsCallParam0);
+	rhsCall.parameters = [rhsCallParam0Value];
 
 	auto rhsArray = new ArrayLiteralExpression();
 	rhsArray.items ~= ValueExpression.pack(rhsCall);
@@ -168,7 +180,6 @@ AbstractRecipe analyze(Statement statement) @safe {
 ExecutionEngine makeEngine() @safe {
 	auto engine = new ExecutionEngine();
 
-	engine.register("autocollect", wrapFunctions!autocollect);
 	engine.register("collect", wrapFunctions!collect);
 	engine.boot();
 
@@ -552,42 +563,6 @@ private void collectFilesByPurpose(
 			}();
 		}
 	}();
-}
-
-LiteralExpression autocollect() {
-	/+
-		TODO: replace with something else.
-
-		`autocollect()` is nonsense as-is.
-
-		mindybuild is supposed to find a recipe file in parent directories and load it.
-		Currently, this is part of the autocollect-ion process.
-		Would a recipe file contain an `autocollect()` call, that recipe would load itself recursively again and again.
-
-		Furthermore, the current implementation does not even attempt to load the found recipe file;
-		instead it runs `collect(".")` from within the directory that contains the recipe.
-	 +/
-	const target = determineAutocollectTarget();
-	auto cwd = new StringLiteralExpression();
-	cwd.value = ".";
-
-	File.chdir(target);
-
-	return collect(cwd);
-}
-
-private str determineAutocollectTarget() {
-	const recipeDir = findRecipeDir(".");
-	if (recipeDir !is null) {
-		return recipeDir;
-	}
-
-	const projectDir = findProjectDir(".");
-	if (projectDir !is null) {
-		return projectDir;
-	}
-
-	return ".";
 }
 
 private str findRecipeDir(str pathStartingPoint) {
