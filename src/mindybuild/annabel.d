@@ -1642,7 +1642,7 @@ final class ExecutionEngine {
 
 	private {
 		void execute(AppendExpression expr) {
-			assert(false);
+			assert(false, "Not implemented.");
 		}
 
 		void execute(ArrayLiteralExpression expr) {
