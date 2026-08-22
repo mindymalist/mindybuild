@@ -703,7 +703,7 @@ private T parseBinaryExpression(T : BinaryExpression)(
 	return result;
 }
 
-private CallExpression parseCallExpression(ref Feeder feeder, SelectorExpression functionName) @safe pure {
+private CallExpression parseCallExpression(ref Feeder feeder, IdentifierExpression functionName) @safe pure {
 	alias Type = Token.Type;
 
 	assert(feeder.front.type == Type.braceParenOpen);
@@ -752,26 +752,138 @@ private CallExpression parseCallExpression(ref Feeder feeder, SelectorExpression
 	throw new UnexpectedEOFException(feeder.front.location);
 }
 
+private IdentifierExpression parseIdentifierExpression(ref Feeder feeder) @safe pure {
+	alias Type = Token.Type;
+
+	if (feeder.empty) {
+		throw new UnexpectedEOFException(feeder.front.location);
+	}
+
+	if (feeder.front.type != Type.identifier) {
+		throw new UnexpectedTokenException(feeder.front, [Type.identifier]);
+	}
+
+	auto result = new IdentifierExpression();
+
+	result.identifier = feeder.front.data;
+	feeder.popFront();
+
+	return result;
+}
+
+private IndexExpression parseIndexExpression(ref Feeder feeder) @safe pure {
+	alias Type = Token.Type;
+
+	if (feeder.empty) {
+		throw new UnexpectedEOFException(feeder.front.location);
+	}
+
+	if (feeder.front.type != Type.braceSquarOpen) {
+		throw new UnexpectedTokenException(feeder.front, [Type.braceSquarOpen]);
+	}
+	feeder.popFront();
+
+	auto index = parseIntegerLiteralExpression(feeder);
+
+	if (feeder.empty) {
+		throw new UnexpectedEOFException(feeder.front.location);
+	}
+
+	if (feeder.front.type != Type.braceSquarClose) {
+		throw new UnexpectedTokenException(feeder.front, [Type.braceSquarOpen]);
+	}
+	feeder.popFront();
+
+	auto result = new IndexExpression();
+	result.index = index;
+
+	return result;
+}
+
+private IntegerLiteralExpression parseIntegerLiteralExpression(ref Feeder feeder) @safe pure {
+	import std.conv : to;
+
+	alias Type = Token.Type;
+
+	if (feeder.empty) {
+		throw new UnexpectedEOFException(feeder.front.location);
+	}
+
+	if (feeder.front.type != Type.literalInteger) {
+		throw new UnexpectedTokenException(feeder.front, [Type.literalInteger]);
+	}
+
+	auto data = feeder.front.data;
+	feeder.popFront();
+
+	{
+		size_t underscores = 0;
+		foreach (c; data) {
+			if (c == '_') {
+				++underscores;
+			}
+		}
+
+		if (underscores > 0) {
+			auto substituteData = new char[](data.length - underscores);
+			foreach (ref c; substituteData) {
+				() @trusted {
+					while (data.ptr[0] == '_') {
+						data = data.ptr[1 .. data.length];
+					}
+
+					c = data.ptr[0];
+				}();
+			}
+
+			data = substituteData;
+		}
+	}
+
+	const value = data.to!long();
+
+	auto result = new IntegerLiteralExpression();
+	result.value = value;
+
+	return result;
+}
+
 private SelectorExpression parseSelectorExpression(ref Feeder feeder) @safe pure {
 	alias Type = Token.Type;
 
-	SelectorExpression result;
+	SelectorExpression result = null;
+
+	auto prev = Type.dot;
 
 	while (!feeder.empty) {
-		if (feeder.front.type != Type.identifier) {
-			throw new UnexpectedTokenException(feeder.front, [Type.identifier]);
+		switch (feeder.front.type) {
+			case Type.identifier:
+				result.attachNext(parseIdentifierExpression(feeder));
+				prev = Type.identifier;
+				break;
+
+			case Type.braceSquarOpen:
+				result.attachNext(parseIdentifierExpression(feeder));
+				prev = Type.braceSquarOpen;
+				break;
+
+			default:
+				throw new UnexpectedTokenException(feeder.front, [Type.identifier, Type.braceSquarOpen]);
 		}
 
-		if (result is null) {
-			result = new SelectorExpression();
-		}
-		result.identifiers ~= feeder.front.data;
-
-		feeder.popFront();
-		if (feeder.empty || (feeder.front.type != Type.dot)) {
+		if (feeder.empty) {
 			return result;
 		}
 
+		if (feeder.front.type == Type.braceSquarOpen) {
+			continue;
+		}
+
+		if (feeder.front.type != Type.dot) {
+			return result;
+		}
+
+		prev = Type.dot;
 		feeder.popFront();
 	}
 
@@ -785,7 +897,20 @@ private Expression parseExpressionWithIdentifier(ref Feeder feeder) @safe pure {
 
 	switch (feeder.front.type) {
 		case Type.braceParenOpen:
-			return parseCallExpression(feeder, lhs);
+			if (lhs.next !is null) {
+				throw new UnexpectedTokenException(feeder.front, [
+					Type.opAppend,
+					Type.opAssign,
+				]);
+			}
+			auto lhsIdentifierExpr = cast(IdentifierExpression) lhs;
+			if (lhsIdentifierExpr is null) {
+				throw new UnexpectedTokenException(feeder.front, [
+					Type.opAppend,
+					Type.opAssign,
+				]);
+			}
+			return parseCallExpression(feeder, lhsIdentifierExpr);
 
 		case Type.opAppend:
 			return parseAppendExpression(feeder, lhs);
@@ -1309,7 +1434,8 @@ final class BooleanLiteralExpression : LiteralExpression {
 final class CallExpression : Expression {
 	public {
 		///
-		SelectorExpression functionName;
+		IdentifierExpression functionName;
+
 		///
 		ValueExpression[] parameters;
 	}
@@ -1331,6 +1457,69 @@ final class CallExpression : Expression {
 			parameter.toString(printer);
 		}
 		printer.print(")");
+	}
+
+	///
+	alias toString = typeof(super).toString;
+}
+
+///
+final class IdentifierExpression : SelectorExpression {
+	public {
+		///
+		str identifier;
+	}
+
+@safe pure:
+
+	public this() {
+		super();
+	}
+
+	protected override void selectorString(bool first, void delegate(str) @safe pure sink) const {
+		if (!first) {
+			sink(".");
+		}
+		sink(identifier);
+	}
+}
+
+final class IndexExpression : SelectorExpression {
+@safe pure:
+
+	public {
+		///
+		IntegerLiteralExpression index;
+	}
+
+	public this() {
+		super();
+	}
+
+	protected override void selectorString(bool, void delegate(str) @safe pure sink) const {
+		import std.conv : to;
+
+		sink("[");
+		sink(index.to!string());
+		sink("]");
+	}
+}
+
+class IntegerLiteralExpression : LiteralExpression {
+@safe pure:
+
+	public {
+		///
+		long value;
+	}
+
+	public this() {
+		super();
+	}
+
+	///
+	public override void toString(ref CodePrinter printer) const {
+		return printer.print(printer, value);
 	}
 
 	///
@@ -1383,10 +1572,10 @@ final class ObjectLiteralExpression : LiteralExpression {
 }
 
 ///
-final class SelectorExpression : Expression {
+abstract class SelectorExpression : Expression {
 	public {
 		///
-		str[] identifiers;
+		SelectorExpression next;
 	}
 
 @safe pure:
@@ -1396,49 +1585,25 @@ final class SelectorExpression : Expression {
 	}
 
 	///
-	public override void toString(ref CodePrinter printer) const {
-		return this.printSelector(identifiers, printer);
+	public final override void toString(ref CodePrinter printer) const {
+		this.selectorString(true, &printer.print!str);
+
+		for (auto nxt = (()@trusted => cast() next)(); nxt !is null; nxt = nxt.next) {
+			this.selectorString(false, &printer.print!str);
+		}
 	}
 
 	///
 	alias toString = typeof(super).toString;
 
-	private static void printSelector(const str[] identifiers, ref CodePrinter printer) {
-		if (identifiers.length == 0) {
-			return;
+	protected abstract void selectorString(bool first, void delegate(str) @safe pure sink) const;
+
+	protected void attachNext(SelectorExpression nextToAttach) {
+		if (this.next !is null) {
+			return this.next.attachNext(nextToAttach);
 		}
 
-		printer.print(identifiers[0]);
-
-		foreach (identifier; identifiers[1 .. $]) {
-			printer.print(".");
-			printer.print(identifier);
-		}
-	}
-
-	private static string selectorToString(const str[] identifiers) {
-		import std.array : appender;
-
-		if (identifiers.length == 0) {
-			return null;
-		}
-
-		auto result = appender!string();
-		size_t total = (() @trusted => identifiers.ptr[0].length)();
-		foreach (identifier; identifiers[1 .. $]) {
-			total += (1 + identifier.length);
-		}
-
-		result.reserve(total);
-
-		result ~= (() @trusted => identifiers.ptr[0])();
-
-		foreach (idx, identifier; identifiers[1 .. $]) {
-			result ~= ".";
-			result ~= identifier;
-		}
-
-		return result[];
+		this.next = nextToAttach;
 	}
 }
 
@@ -1661,11 +1826,7 @@ final class ExecutionEngine {
 				return "Cannot call undefined function `" ~ expr.functionName.toString() ~ "`.";
 			}
 
-			if (expr.functionName.identifiers.length != 1) {
-				throw new ExecutionEngineRuntimeCodeException(getErrorMessage(), expr.location);
-			}
-
-			auto callback = expr.functionName.identifiers[0] in _functions;
+			auto callback = expr.functionName.identifier in _functions;
 
 			if (callback is null) {
 				throw new ExecutionEngineRuntimeCodeException(getErrorMessage(), expr.location);
@@ -1712,6 +1873,9 @@ final class ExecutionEngine {
 			ObjectLiteralExpression tree,
 			bool forWriting,
 		) {
+			if (auto identifierExpr = cast(IdentifierExpression) expr) {
+			}
+
 			const identifier = expr.identifiers[idxSelector];
 			auto ptr = identifier in tree.properties;
 
