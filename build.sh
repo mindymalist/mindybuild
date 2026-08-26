@@ -38,7 +38,6 @@ mkdir -p bin
 
 sourceFiles="\
 	src/mindybuild/common.d \
-	src/mindybuild/annabel.d \
 	src/mindybuild/kapenparse.d \
 	src/mindybuild/configure.d \
 	src/mindybuild/make.d \

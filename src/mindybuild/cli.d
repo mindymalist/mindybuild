@@ -61,18 +61,10 @@ template runMindybuildCommandLineApp() {
 			case "--get-module-name":
 				return runGetModuleName(stdout, stderr, args[1 .. $]);
 
-			case "lex-bel":
-			case "--lex-bel":
-				return runLexBEL(stdout, stderr, args[1 .. $]);
-
 			case "make":
 			case "--make":
 			case "-m":
 				return runMake(stderr, args[1 .. $]);
-
-			case "parse-bel":
-			case "--parse-bel":
-				return runParseBEL(stdout, stderr, args[1 .. $]);
 
 			case "help":
 			case "--help":
@@ -191,102 +183,10 @@ template runMindybuildCommandLineApp() {
 			return (status == Status.success) ? 0 : 1;
 		}
 
-		int runLexBEL(File stdout, File stderr, string[] args) {
-			import mindybuild.annabel;
-			import std.file : readText;
-
-			if (args.length == 0) {
-				stderr.writeErrorNoInputfiles();
-				return 1;
-			}
-
-			if (args.length > 1) {
-				stderr.writeln("Error: Too many arguments.");
-				return 1;
-			}
-
-			const file = args[0];
-
-			string sourceCode;
-			try {
-				sourceCode = readText(file);
-			}
-			catch (Exception ex) {
-				stderr.writeln(file, ": ", ex.msg);
-				debug {
-					stderr.writeExceptionOrigin(ex);
-				}
-				return 1;
-			}
-
-			auto status = Status.success;
-			foreach (token; Lexer(sourceCode, file)) {
-				if (token.type == Token.Type.invalid) {
-					status = Status.error;
-				}
-				else if (token.type == Token.Type.invalidCharset) {
-					status = Status.error;
-				}
-
-				const(char)[][1] tokData = [token.data];
-				stdout.writefln!"%s,%s,%s,%(%s%)"(token.location.file, token.location.byteOffset, token.type, tokData);
-			}
-
-			return (status == Status.success) ? 0 : 1;
-		}
-
 		int runMake(File stderr, string[] args) {
 			static import mindybuild.make;
 
 			return mindybuild.make.run(stderr, args);
-		}
-
-		int runParseBEL(File stdout, File stderr, string[] args) {
-			import mindybuild.annabel;
-			import std.file : readText;
-
-			if (args.length == 0) {
-				stderr.writeErrorNoInputfiles();
-				return 1;
-			}
-
-			if (args.length > 1) {
-				stderr.writeln("Error: Too many arguments.");
-				return 1;
-			}
-
-			const file = args[0];
-
-			string sourceCode;
-			try {
-				sourceCode = readText(file);
-			}
-			catch (Exception ex) {
-				stderr.writeln(file, ": ", ex.msg);
-				return 1;
-			}
-
-			try {
-				foreach (statement; Parser(sourceCode, file)) {
-					stdout.write(statement.toString());
-				}
-			}
-			catch (ParserException ex) {
-				stderr.writeln(ex.location.humanReadable, ": ", ex.msg);
-				debug {
-					stderr.writeExceptionOrigin(ex);
-				}
-				return 1;
-			}
-			catch (Exception ex) {
-				stderr.writeln("Error: ", ex.msg);
-				debug {
-					stderr.writeExceptionOrigin(ex);
-				}
-				return 1;
-			}
-
-			return 0;
 		}
 	}
 

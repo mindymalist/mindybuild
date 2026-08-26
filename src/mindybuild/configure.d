@@ -11,41 +11,102 @@
  +/
 module mindybuild.configure;
 
-import mindybuild.annabel;
 import mindybuild.common;
 import mindybuild.kapenparse;
-import std.conv;
 
+import std.array;
+import std.conv;
 import File = std.file;
+import Meta = std.meta;
+import std.path;
 import std.stdio : FileHandle = File;
 
+///
 int run(FileHandle stderr, string[] args) @safe {
-	auto abstractRecipe = loadAndAnalyzeRecipe();
-	stderr.writeln(abstractRecipe.data, "\n====");
-	auto recipe = transformRecipe(abstractRecipe);
-	stderr.writeln(recipe);
+	try {
+		changeDirectoryToProjectRoot();
+		const recipe = collectBuildRecipe(args);
+		writeMakefile(recipe);
+		return 0;
+	}
+	catch (Exception ex) {
+		(() @trusted => stderr.writeln(ex))();
+	}
+
 	return 1;
 }
 
-struct Conventions {
-	static immutable {
-		auto recipeFilename = "mindybuild.bel";
+///
+struct Sentinel {
+	///
+	str filename;
 
-		auto projectRootSentinels = [
-			".git",
-			".gitignore",
-			".hg",
-			".hgignore",
-			"dub.json",
-			"dub.sdl",
+	///
+	Type type;
+
+	///
+	enum Type {
+		///
+		file,
+
+		///
+		directory,
+	}
+}
+
+immutable struct Conventions {
+	@disable this();
+	@disable this(this);
+
+	// Sentinels
+	static immutable {
+
+		auto projectRootSentinelsPrimary = [
+			Sentinel(".mindybuild", Sentinel.Type.directory),
+			Sentinel(".mindybuild-root", Sentinel.Type.file),
 		];
+		auto projectRootSentinelsSecondary = [
+			Sentinel(".git", Sentinel.Type.directory),
+			Sentinel(".gitignore", Sentinel.Type.file),
+			Sentinel(".hg", Sentinel.Type.directory),
+			Sentinel(".hgignore", Sentinel.Type.file),
+			Sentinel("dub.json", Sentinel.Type.file),
+			Sentinel("dub.sdl", Sentinel.Type.file),
+		];
+
+		auto buildUnitRootSentinelsPrimary = [
+			".mindybuild-buildunit",
+			".buildunit",
+		];
+
+		auto stringImportRootSentinelsPrimary = [
+			".-J",
+			".mindybuild-J",
+			".string-imports",
+		];
+		auto stringImportDirectorySentinels = [
+			".string-imports",
+			"dubhash.txt",
+		];
+
+		auto dImportRootSentinelsPrimary = [
+			".-I",
+			".d-imports",
+			".imports",
+		];
+		auto dImportRootSentinelsSecondary = [
+			".-I",
+			".d-imports",
+			".imports",
+		];
+
+	}
+
+	// File extensions
+	static immutable {
 
 		auto stringImportFileExtensions = [
 			".dt",
-		];
-
-		auto stringImportDirectorySentinels = [
-			"dubhash.txt",
 		];
 
 		auto stringImportCommonDirectories = [
@@ -83,269 +144,8 @@ struct Conventions {
 	}
 }
 
-AbstractRecipe loadAndAnalyzeRecipe() @safe {
-	static auto impl(int counter) {
-		const runningInProjectRoot = File.exists(Conventions.recipeFilename);
-		if (runningInProjectRoot) {
-			auto document = loadDocument(Conventions.recipeFilename);
-
-			if (document.statements.length == 0) {
-				return analyze(fallbackRecipe);
-			}
-
-			return analyze(document);
-		}
-
-		const recipeDir = findRecipeDir(".");
-		if (recipeDir !is null) {
-			File.chdir(recipeDir);
-
-			++counter;
-			if (counter >= 3) {
-				throw new Exception("Unable to load project: Filesystem seemingly keeps changing.");
-			}
-			return impl(counter);
-		}
-
-		const projectDir = findProjectDir(".");
-		if (projectDir !is null) {
-			File.chdir(recipeDir);
-		}
-
-		return analyze(fallbackRecipe);
-	}
-
-	return impl(0);
-}
-
-Document loadDocument(str path) @safe {
-	const rawRecipe = (() @trusted => cast(string) File.read(path))();
-	return parseDocument(rawRecipe, path);
-}
-
-enum FallbackRecipeType {
-	error,
-	recipeFileAbsent,
-	recipeFileEmpty,
-}
-
-Statement fallbackRecipe() @safe {
-	auto lhsSelector = new SelectorExpression();
-	lhsSelector.identifiers = ["units"];
-
-	auto rhsSelector = new SelectorExpression();
-
-	auto rhsCall = new CallExpression();
-	rhsCall.functionName = rhsSelector;
-
-	rhsSelector.identifiers = ["collect"];
-	auto rhsCallParam0 = new StringLiteralExpression();
-	rhsCallParam0.value = ".";
-	auto rhsCallParam0Value = new ValueExpression();
-	rhsCallParam0Value.data = ValueExpression.Data(rhsCallParam0);
-	rhsCall.parameters = [rhsCallParam0Value];
-
-	auto rhsArray = new ArrayLiteralExpression();
-	rhsArray.items ~= ValueExpression.pack(rhsCall);
-
-	auto rhsValue = new ValueExpression();
-	rhsValue.data = ValueExpression.Data(rhsArray);
-
-	auto assignment = new AssignmentExpression();
-	assignment.lhs = lhsSelector;
-	assignment.rhs = rhsValue;
-
-	auto statement = Statement(assignment);
-	return statement;
-}
-
-AbstractRecipe analyze(Document document) @safe {
-	return analyze(document.statements);
-}
-
-AbstractRecipe analyze(Statement[] statements) @safe {
-	auto engine = makeEngine();
-	foreach (statement; statements) {
-		engine.execute(statement);
-	}
-	return AbstractRecipe(engine.data);
-}
-
-AbstractRecipe analyze(Statement statement) @safe {
-	auto engine = makeEngine();
-	engine.execute(statement);
-	return AbstractRecipe(engine.data);
-}
-
-ExecutionEngine makeEngine() @safe {
-	auto engine = new ExecutionEngine();
-
-	engine.register("collect", wrapFunctions!collect);
-	engine.boot();
-
-	return engine;
-}
-
-///
-class AnalyzerException : Exception {
-	public {
-		///
-		Location location;
-	}
-
-	private this(
-		string message,
-		Location location,
-		string file = __FILE__, size_t line = __LINE__
-	) @safe pure nothrow @nogc {
-		this.location = location;
-		super(message, file, line);
-	}
-}
-
-///
-struct AbstractRecipe {
-	///
-	ObjectLiteralExpression data;
-}
-
-Recipe transformRecipe(AbstractRecipe abstractRecipe) @safe {
-	static void transformDC(ValueExpression[str] data, ref Recipe result, lazy string parent) {
-		ValueExpression* dc = "dc" in data;
-		if (dc is null) {
-			return;
-		}
-
-		result.dCompiler = tryGetString(*dc, parent.buildPropertyPath("dc")).value;
-	}
-
-	static void transformInputPaths(ValueExpression[str] data, out InputPaths result, lazy string parent) {
-		ValueExpression* paths = "paths" in data;
-		if (paths is null) {
-			return;
-		}
-
-		ObjectLiteralExpression collection = tryGetObject(*paths, "paths");
-
-		ValueExpression* sourcePaths = "source" in collection.properties;
-		ValueExpression* importPaths = "import" in collection.properties;
-		ValueExpression* stringImportPaths = "string" in collection.properties;
-
-		if (sourcePaths !is null) {
-			auto pathsArray = tryGetArray(*sourcePaths, parent.buildPropertyPath("paths.source")).items;
-			result.source.reserve(pathsArray.length);
-			foreach (idx, path; pathsArray) {
-				result.source ~= tryGetString(path, parent.buildPropertyPath(i"paths.source[$(idx)]".text)).value;
-			}
-		}
-		if (importPaths !is null) {
-			auto pathsArray = tryGetArray(*importPaths, parent.buildPropertyPath("paths.import")).items;
-			result.source.reserve(pathsArray.length);
-			foreach (idx, path; pathsArray) {
-				result.import_ ~= tryGetString(path, parent.buildPropertyPath(i"paths.import[$(idx)]".text)).value;
-			}
-		}
-		if (sourcePaths !is null) {
-			auto pathsArray = tryGetArray(*stringImportPaths, parent.buildPropertyPath("paths.string")).items;
-			result.source.reserve(pathsArray.length);
-			foreach (idx, path; pathsArray) {
-				result.stringImport ~= tryGetString(path, parent.buildPropertyPath(i"paths.string[$(idx)]".text)).value;
-			}
-		}
-	}
-
-	static void transformOutputPaths(ValueExpression[str] data, out OutputPaths result, lazy string parent) {
-		ValueExpression* paths = "paths" in data;
-		if (paths is null) {
-			return;
-		}
-
-		ObjectLiteralExpression collection = tryGetObject(*paths, "paths");
-
-		ValueExpression* prefix = "prefix" in collection.properties;
-		ValueExpression* bin = "bin" in collection.properties;
-		ValueExpression* lib = "lib" in collection.properties;
-
-		if (prefix !is null) {
-			result.prefix = tryGetString(*prefix, parent.buildPropertyPath("paths.prefix")).value;
-		}
-		if (bin !is null) {
-			result.bin = tryGetString(*bin, parent.buildPropertyPath("paths.bin")).value;
-		}
-
-		if (lib !is null) {
-			result.prefix = tryGetString(*lib, parent.buildPropertyPath("paths.lib")).value;
-		}
-	}
-
-	static void transformUnit(ValueExpression[str] data, out BuildUnit result, lazy string parent) {
-		ValueExpression* name = "name" in data;
-		ValueExpression* dc = "dc" in data;
-		ValueExpression* paths = "paths" in data;
-		ValueExpression* dflags = "dflags" in data;
-
-		if (name !is null) {
-			result.name = tryGetString(*name, parent.buildPropertyPath("name")).value;
-		}
-
-		if (paths !is null) {
-			transformInputPaths(data, result.paths.input, parent);
-			transformOutputPaths(data, result.paths.output, parent);
-		}
-
-		if (dc !is null) {
-			result.dCompiler = tryGetString(*dc, parent.buildPropertyPath("dc")).value;
-		}
-
-		if (dflags !is null) {
-			ArrayLiteralExpression dflagsArray;
-			StringLiteralExpression dflagsString;
-			if ((*dflags).data.tryGet(dflagsArray)) {
-				result.dflags = tryGetArrayOfStrings(dflagsArray, parent.buildPropertyPath("dflags"));
-			}
-			else if ((*dflags).data.tryGet(dflagsString)) {
-				result.dflags = splitArgsString(dflagsString.value);
-			}
-			else {
-				throw new BadRecipeValueException(
-					parent.buildPropertyPath("dflags"),
-					"Must be either an array or a string.",
-					dflags.location,
-				);
-			}
-		}
-	}
-
-	static void transformUnits(ValueExpression[str] data, ref Recipe result) {
-		ValueExpression* units = "units" in data;
-		if (units is null) {
-			return;
-		}
-
-		ArrayLiteralExpression unitsArray = tryGetArray(*units, "units");
-		result.units.reserve(unitsArray.items.length);
-
-		foreach (idx, unit; unitsArray.items) {
-			auto unitData = tryGetObject(unit, i"units[$(idx)]".text).properties;
-
-			BuildUnit buildUnit;
-			transformUnit(unitData, buildUnit, i"units[$(idx)]".text);
-
-			result.units ~= buildUnit;
-		}
-	}
-
-	auto result = Recipe();
-	transformDC(abstractRecipe.data.properties, result, null);
-	transformOutputPaths(abstractRecipe.data.properties, result.paths, null);
-	transformUnits(abstractRecipe.data.properties, result);
-	return result;
-
-	// TODO
-	assert(false, "TODO");
-}
-
 struct Recipe {
+	str name;
 	OutputPaths paths;
 
 	BuildUnit[] units = null;
@@ -379,119 +179,94 @@ struct OutputPaths {
 	str lib = "$(prefix)/lib";
 }
 
-struct ProjectRoot {
-	str path;
-	str recipeFilename;
-
-@safe pure nothrow @nogc:
-
-	bool hasRecipeFile() const {
-		return (recipeFilename !is null);
-	}
-}
-
 ///
-final class BadRecipeParameterException : BadRecipeException {
-	public {
-		///
-		string functionName;
-
-		///
-		size_t index;
-	}
-
+final class ConfigureException : Exception {
 	private this(
-		string functionName,
-		size_t index,
-		string issue,
-		Location location,
-		string file = __FILE__, size_t line = __LINE__
-	) @safe pure nothrow {
-		this.functionName = functionName;
-		this.index = index;
-
-		const msg =
-			"Unsupported value for parameter #" ~ index.to!string ~ " of function `" ~ functionName ~ "`: " ~ issue;
-		super(msg, location, file, line);
-	}
-}
-
-///
-class BadRecipeException : Exception {
-	public {
-		///
-		Location location;
-	}
-
-	private this(
-		string message,
-		Location location,
-		string file = __FILE__, size_t line = __LINE__
-	) @safe pure nothrow @nogc {
-		this.location = location;
-		super(message, file, line);
-	}
-}
-
-///
-final class BadRecipeValueException : BadRecipeException {
-	public {
-		///
-		string property;
-	}
-
-	private this(
-		string property,
-		string issue,
-		Location location,
-		string file = __FILE__, size_t line = __LINE__
-	) @safe pure nothrow {
-		this.property = property;
-
-		const msg = "Unsupported value for property `" ~ property ~ "`: " ~ issue;
-		super(msg, location, file, line);
+		string msg,
+		Throwable nextInChain = null,
+		string file = __FILE__, size_t line = __LINE__,
+	) @nogc @safe pure nothrow {
+		super(msg, file, line, null);
 	}
 }
 
 @safe:
 
-LiteralExpression collect(LiteralExpression pathExpr) {
+void changeDirectoryToProjectRoot() {
+	str projectRoot;
+	try {
+		projectRoot = determineProjectRoot();
+	}
+	catch (Exception ex) {
+		throw new ConfigureException("An error occured while determining the project root.", ex);
+	}
+	if (projectRoot is null) {
+		return;
+	}
+
+	try {
+		File.chdir(projectRoot);
+	}
+	catch (Exception ex) {
+		const projectRootString = (() @trusted => cast(string) projectRoot)();
+		const msg = "Could not change the current working directory to `" ~ projectRootString ~ "`.";
+		throw new ConfigureException(msg);
+	}
+}
+
+str determineProjectRoot() {
+	str projectRoot = findDirUpstream(".", Conventions.projectRootSentinelsPrimary);
+
+	if (projectRoot is null) {
+		projectRoot = findDirUpstream(".", Conventions.projectRootSentinelsSecondary);
+	}
+
+	return projectRoot;
+}
+
+Recipe collectBuildRecipe(const str[] args) {
+	auto result = Recipe();
+
+	result.name = baseName(".".asAbsolutePath).array;
+	// TODO
+
+	return result;
+}
+
+void writeMakefile(const Recipe recipe) {
+	// TODO
+	assert(false, "Not implemented.");
+}
+
+@safe:
+
+BuildUnit collectBuildUnit(string path) {
 	import std.array : array;
 	import std.path;
 
-	auto pathStringExpr = cast(StringLiteralExpression) pathExpr;
-	if (pathStringExpr is null) {
-		throw new BadRecipeParameterException("collect", 0, "String expected.", pathExpr.location);
-	}
+	auto result = BuildUnit();
 
-	const path = (() @trusted => cast(string) pathStringExpr.value)();
-	const pathBaseName = path.asAbsolutePath.asNormalizedPath.array.baseName;
+	result.name = path.asAbsolutePath.asNormalizedPath.array.baseName;
 
-	ValueExpression[] sourceFiles;
-	ValueExpression[] importDirs;
-	ValueExpression[] stringDirs;
-	collectFilesByPurpose(path, sourceFiles, importDirs, stringDirs);
+	auto sourceFiles = appender!(str[]);
+	auto importDirs = appender!(str[]);
+	auto stringDirs = appender!(str[]);
+	collectFilesByPurpose(
+		path, sourceFiles, importDirs, stringDirs
+	);
 
-	{
-		auto result = new ObjectLiteralExpression();
+	result.paths.input.source = sourceFiles[];
+	result.paths.input.import_ = importDirs[];
+	result.paths.input.stringImport = stringDirs[];
 
-		result.properties["name"] = ValueExpression.pack(pathBaseName);
-
-		auto inputPaths = new ObjectLiteralExpression();
-		inputPaths.properties["source"] = ValueExpression.pack(ArrayLiteralExpression.pack(sourceFiles));
-		inputPaths.properties["import"] = ValueExpression.pack(ArrayLiteralExpression.pack(importDirs));
-		inputPaths.properties["string"] = ValueExpression.pack(ArrayLiteralExpression.pack(stringDirs));
-		result.properties["paths"] = ValueExpression.pack(inputPaths);
-
-		return result;
-	}
+	return result;
 }
 
 private void collectFilesByPurpose(
 	string path,
-	ref ValueExpression[] sourceFiles,
-	ref ValueExpression[] importDirs,
-	ref ValueExpression[] stringDirs,
+	ref Appender!(str[]) sourceFiles,
+	ref Appender!(str[]) importDirs,
+	ref Appender!(str[]) stringDirs,
 ) @safe {
 	import std.array : array;
 	import std.path;
@@ -502,7 +277,7 @@ private void collectFilesByPurpose(
 			return;
 		}
 
-		importDirs ~= ValueExpression.pack(path);
+		importDirs ~= path;
 		pathAsImportDirAdded = true;
 	}
 
@@ -512,7 +287,7 @@ private void collectFilesByPurpose(
 			return;
 		}
 
-		stringDirs ~= ValueExpression.pack(path);
+		stringDirs ~= path;
 		pathAsStringImportDirAdded = true;
 	}
 
@@ -525,13 +300,25 @@ private void collectFilesByPurpose(
 		foreach (file; File.dirEntries(path, File.SpanMode.shallow)) {
 			() @safe {
 				if (file.isFile) {
+					if (file.name.isDSourceFile) {
+						string sourceCode = (() @trusted => cast(string) File.read(file.name))();
+						const moduleName = parseModuleName(sourceCode);
+					}
 					if (file.name.isDSourceFile || file.name.isCSourceFile) {
-						sourceFiles ~= ValueExpression.pack(file.name);
+						sourceFiles ~= file.name;
+						// TODO: wrong dir
 						addPathAsImportDir();
 						return;
 					}
 
 					if (file.name.isDImportFile || file.name.isCIncludeFile) {
+						// TODO: wrong dir
+						addPathAsImportDir();
+						return;
+					}
+
+					if (file.name.isDImportFile || file.name.isCIncludeFile) {
+						// TODO: wrong dir
 						addPathAsImportDir();
 						return;
 					}
@@ -565,111 +352,51 @@ private void collectFilesByPurpose(
 	}();
 }
 
-private str findRecipeDir(str pathStartingPoint) {
-	return findDir(pathStartingPoint, Conventions.recipeFilename);
-}
+private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles) {
+	static immutable parent = dirSeparator ~ "..";
 
-private str findProjectDir(str pathStartingPoint) {
-	import std.meta;
-
-	return findDir(pathStartingPoint, aliasSeqOf!(Conventions.projectRootSentinels));
-}
-
-private str findDir(Needles...)(const str pathStartingPoint, immutable Needles needles) {
-	import std.path;
-
-	size_t safetyMechanism = 0;
-
-	str path = pathStartingPoint;
-	do {
-		if (++safetyMechanism >= 256) {
-			assert(false, "Unrealistically deep nesting; potential recursion issue.");
-		}
-
+	for (auto path = appender!string(pathStartingPoint); !isRoot(path[]); path ~= parent) {
 		foreach (needle; needles) {
-			static assert(is(typeof(needle) == immutable(string)));
-
 			bool found = false;
+			auto filePath = chainPath(path[], needle.filename);
 			try {
-				const filePath = path.buildPath(Conventions.recipeFilename);
 				found = File.exists(filePath);
 			}
 			catch (Exception) {
-				return null;
+				continue;
 			}
 
 			if (found) {
-				return pathStartingPoint;
+				final switch (needle.type) {
+					case Sentinel.Type.file:
+						if (File.isFile(filePath)) {
+							return path.array;
+						}
+						break;
+
+					case Sentinel.Type.directory:
+						if (File.isDir(filePath)) {
+							return path.array;
+						}
+						break;
+				}
 			}
 		}
-
-		path = path.buildPath("..");
 	}
-	while (!path.isRoot);
 
 	return null;
 }
 
 bool isRoot(str path) {
+	import std.algorithm.comparison : cmp;
 	import std.path;
 
-	version (Posix) {
-		import std.algorithm.comparison : cmp;
+	const compared = cmp(
+		chainPath(path, ".").asAbsolutePath.asNormalizedPath,
+		chainPath(path, "..").asAbsolutePath.asNormalizedPath,
+	);
 
-		return (cmp(path.asAbsolutePath.asNormalizedPath, "/") == 0);
-	}
-	version (Windows) {
-		import std.array : array;
-
-		const stripped = stripDrive(path.asAbsolutePath.asNormalizedPath.array);
-		return ((stripped == `\`) || (stripped == ""));
-	}
-}
-
-string buildPropertyPath(string parent, string child) {
-	if (parent.length > 0) {
-		return parent ~ "." ~ child;
-	}
-
-	return child;
-}
-
-ArrayLiteralExpression tryGetArray(ValueExpression expr, lazy string property) {
-	ArrayLiteralExpression result;
-	if (!expr.data.tryGet(result)) {
-		throw new BadRecipeValueException(property, "Must be an array.", expr.location);
-	}
-	return result;
-}
-
-ObjectLiteralExpression tryGetObject(ValueExpression expr, lazy string property) {
-	ObjectLiteralExpression result;
-	if (!expr.data.tryGet(result)) {
-		throw new BadRecipeValueException(property, "Must be an object.", expr.location);
-	}
-	return result;
-}
-
-StringLiteralExpression tryGetString(ValueExpression expr, lazy string property) {
-	StringLiteralExpression result;
-	if (!expr.data.tryGet(result)) {
-		throw new BadRecipeValueException(property, "Must be a string.", expr.location);
-	}
-	return result;
-}
-
-str[] tryGetArrayOfStrings(ArrayLiteralExpression expr, lazy string property) {
-	auto result = new str[](expr.items.length);
-	foreach (idx, item; expr.items) {
-		*(() @trusted => &result.ptr[idx])() = tryGetString(item, property ~ "[" ~ idx.to!string() ~ "]").value;
-	}
-
-	return result;
-}
-
-str[] tryGetArrayOfStrings(ValueExpression expr, lazy string property) {
-	auto arrayExpr = tryGetArray(expr, property);
-	return tryGetArrayOfStrings(arrayExpr, property);
+	return (compared == 0);
 }
 
 str fileExtensionOf(str filename) {
