@@ -34,6 +34,20 @@ pragma(inline, true) @safe pure nothrow @nogc {
 	}
 }
 
+void writeException(Sink)(Sink sink, Exception exception) {
+	sink.put(exception.message);
+	sink.put("\n");
+
+	auto next = exception.next;
+	if (next !is null) {
+		foreach (ex; next) {
+			sink.put("\t");
+			sink.put(ex.message);
+			sink.put("\n");
+		}
+	}
+}
+
 ///
 struct CodePrinter {
 	import std.array : Appender;

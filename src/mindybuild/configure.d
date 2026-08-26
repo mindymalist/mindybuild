@@ -29,6 +29,9 @@ int run(FileHandle stderr, string[] args) @safe {
 		writeMakefile(recipe);
 		return 0;
 	}
+	catch (ConfigureException ex) {
+		(() @trusted => stderr.lockingTextWriter.writeException(ex))();
+	}
 	catch (Exception ex) {
 		(() @trusted => stderr.writeln(ex))();
 	}
