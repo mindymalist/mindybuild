@@ -48,6 +48,7 @@ fi
 
 sourceFiles="\
 	src/mindybuild/common.d \
+	src/mindybuild/database.d \
 	src/mindybuild/kapenparse.d \
 	src/mindybuild/configure.d \
 	src/mindybuild/make.d \
