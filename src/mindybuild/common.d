@@ -192,6 +192,12 @@ template TaggedUnion(Types...) {
 			this.set(value);
 		}
 
+		///
+		public this(typeof(this) value) {
+			_tag = value._tag;
+			_storage = value._storage;
+		}
+
 		public {
 			///
 			auto opAssign(T)(auto ref T value)
@@ -212,6 +218,20 @@ template TaggedUnion(Types...) {
 				_tag = value._tag;
 				_storage = value._storage;
 				return this;
+			}
+
+			bool opEquals(const typeof(this) b) const {
+				if (_tag != b._tag) {
+					return false;
+				}
+
+				foreach (T; Types) {
+					if (_tag == indexOf!T) {
+						return ((() @trusted => this.load!T())() == (() @trusted => b.load!T())());
+					}
+				}
+
+				assert(false);
 			}
 		}
 
@@ -260,6 +280,25 @@ template TaggedUnion(Types...) {
 			void set(T)(auto ref T value) @trusted
 			if (canHold!T) {
 				this.store(value);
+			}
+		}
+
+		public {
+			string toString() const {
+				import std.conv : text;
+
+				foreach (T; Types) {
+					if (_tag == indexOf!T) {
+						static if (is(T == string)) {
+							return text(typeof(this).stringof ~ "(\"", (() @trusted => this.load!T())(), "\")");
+						}
+						else {
+							return text(typeof(this).stringof ~ "(", (() @trusted => this.load!T())(), ")");
+						}
+					}
+				}
+
+				assert(false);
 			}
 		}
 
