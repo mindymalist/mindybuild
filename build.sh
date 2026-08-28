@@ -22,19 +22,29 @@ use_dc() {
 	fi
 }
 use_dmd() {
-	$DMD $DFLAGS -g -O    -of"bin/mindybuild" -od"bin" -I"src"    -version="MindybuildCommandLineApp" $sourceFiles
+	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O"
+	$DMD $DFLAGS   -of"bin/mindybuild" -od"bin" -I"src"    -version="${version}" $sourceFiles
 	return $?
 }
 use_gdc() {
-	$DC  $DFLAGS -g -O2  -o  "bin/mindybuild"          -I"src"   -fversion="MindybuildCommandLineApp" $sourceFiles
+	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
+	$DC  $DFLAGS  -o  "bin/mindybuild"          -I"src"   -fversion="${version}" $sourceFiles
 	return $?
 }
 use_ldc() {
-	$DC  $DFLAGS -g -O2 --of="bin/mindybuild"          -I"src" --d-version="MindybuildCommandLineApp" $sourceFiles
+	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
+	$DC  $DFLAGS --of="bin/mindybuild"          -I"src" --d-version="${version}" $sourceFiles
 	return $?
 }
 
 mkdir -p bin
+
+if [ -n "${UNITTEST+x}" ]; then
+	version="MindybuildUnittestApp"
+	export DFLAGS="$DFLAGS -unittest"
+else
+	version="MindybuildCommandLineApp"
+fi
 
 sourceFiles="\
 	src/mindybuild/common.d \

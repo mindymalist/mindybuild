@@ -16,6 +16,11 @@ import mindybuild.common;
 version (MindybuildCommandLineApp) {
 	mixin MindybuildCommandLineAppEntryPoint!();
 }
+else version (MindybuildUnittestApp) {
+	void main() {
+		return;
+	}
+}
 
 ///
 mixin template MindybuildCommandLineAppEntryPoint() {
