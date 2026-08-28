@@ -16,8 +16,8 @@ import std.array;
 import std.conv;
 import std.stdio;
 
-DatabaseFile openDatabaseFile(string filePath) {
-	return DatabaseFile(filePath);
+DatabaseFile* openDatabaseFile(string filePath) {
+	return new DatabaseFile(filePath);
 }
 
 private Database openDatabase(char[] data) @trusted {
