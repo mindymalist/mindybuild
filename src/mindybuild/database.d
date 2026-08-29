@@ -50,7 +50,7 @@ struct DatabaseFile {
 
 		_file.rewind();
 		auto buffer = new ubyte[](_file.size);
-		buffer = _file.rawRead(buffer);
+		buffer = (() @trusted => _file.rawRead(buffer))();
 
 		() @trusted {
 			auto entries = Parser(Lexer(cast(char[]) buffer)).array();

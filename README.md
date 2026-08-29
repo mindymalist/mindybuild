@@ -13,6 +13,6 @@
 
 - Run `./build.sh` on POSIX.
 - Run `.\build.cmd` on Windows.
-- Or use DUB.
+- Or use DUB (`dub build --build=prod`).
 
 The resulting executable binary can be found in the subfolder `bin`.
