@@ -46,7 +46,9 @@ EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_dc
-FOR /F "delims=" %%i in (%DC%) DO SET bn=%%~ni
+IF EXIST "%DC%" FOR /F "delims=" %%i in (%DC%) DO SET bn=%%~ni
+IF [%bn%] == [] SET bn=%DC%
+
 SET "_dmd="
 IF /I [%bn%] == [dmd]   SET _dmd=1
 IF /I [%bn%] == [ldmd2] SET _dmd=1
@@ -77,17 +79,17 @@ EXIT /B 1
 REM ============================================================================
 :use_dmd
 IF [%DFLAGS%] == [] SET DFLAGS=-O
-%DMD% %DFLAGS%   -of"bin/mindybuild" -od"bin" -I"src"    -version="MindybuildCommandLineApp" %sourceFiles%
+%DMD% %DFLAGS%   -of"bin/mindybuild.exe" -od"bin" -I"src"    -version="MindybuildCommandLineApp" %sourceFiles%
 EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_gdc
 IF [%DFLAGS%] == [] SET DFLAGS=-O2
-%DC%  %DFLAGS%  -o  "bin/mindybuild"          -I"src"   -fversion="MindybuildCommandLineApp" %sourceFiles%
+%DC%  %DFLAGS%  -o  "bin/mindybuild.exe"          -I"src"   -fversion="MindybuildCommandLineApp" %sourceFiles%
 EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_ldc
 IF [%DFLAGS%] == [] SET DFLAGS=-O2
-%DC%  %DFLAGS% --of="bin/mindybuild"          -I"src" --d-version="MindybuildCommandLineApp" %sourceFiles%
+%DC%  %DFLAGS% --of="bin/mindybuild.exe"          -I"src" --d-version="MindybuildCommandLineApp" %sourceFiles%
 EXIT /B %ERRORLEVEL%
