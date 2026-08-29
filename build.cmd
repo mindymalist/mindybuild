@@ -1,5 +1,5 @@
-REM @ECHO OFF
-SETLOCAL ENABLEEXTENSIONS
+@ECHO OFF
+SETLOCAL enableextensions
 
 CD %~dp0
 IF NOT EXIST "bin" (
@@ -28,12 +28,17 @@ WHERE /Q ldc2
 IF %ERRORLEVEL% EQU 0 (
 	SET DC=ldc2
 ) ELSE (
-	WHERE /Q dmd
+	WHERE /Q gdc
 	IF %ERRORLEVEL% EQU 0 (
-		SET DC=dmd
+		SET DC=gdc
 	) ELSE (
-		ECHO "No suitable D compiler found."
-		EXIT /B 1
+		WHERE /Q dmd
+		IF %ERRORLEVEL% EQU 0 (
+			SET DC=dmd
+		) ELSE (
+			ECHO "No suitable D compiler found."
+			EXIT /B 1
+		)
 	)
 )
 CALL :use_dc
@@ -46,24 +51,38 @@ IF /I [%DC%] == [dmd]   SET _dmd=1
 IF /I [%DC%] == [ldmd2] SET _dmd=1
 IF /I [%DC%] == [ldmd]  SET _dmd=1
 IF /I [%DC%] == [gdmd]  SET _dmd=1
-IF [%_dmd%] EQU 1 (
+IF [%_dmd%] NEQ [] (
 	SET DMD=%DC%
 	CALL :use_dmd
 	EXIT /B %ERRORLEVEL%
 )
 
-IF /I [%DC%] == [ldc2] (
+IF /I [%DC%] == [gdc] (
+	CALL :use_gdc
+	EXIT /B %ERRORLEVEL%
+)
+
+SET "_ldc="
+IF /I [%DC%] == [ldc2] SET _ldc=1
+IF /I [%DC%] == [ldc]  SET _ldc=1
+IF [%_ldc%] NEQ [] (
 	CALL :use_ldc
 	EXIT /B %ERRORLEVEL%
 )
 
-ECHO "Unsupported D compiler `%%DC%%`."
+ECHO "Unsupported D compiler `%DC%`."
 EXIT /B 1
 
 REM ============================================================================
 :use_dmd
 IF [%DFLAGS%] == [] SET DFLAGS=-O
 %DMD% %DFLAGS%   -of"bin/mindybuild" -od"bin" -I"src"    -version="MindybuildCommandLineApp" %sourceFiles%
+EXIT /B %ERRORLEVEL%
+
+REM ============================================================================
+:use_gdc
+IF [%DFLAGS%] == [] SET DFLAGS=-O2
+%DC%  %DFLAGS%  -o  "bin/mindybuild"          -I"src"   -fversion="MindybuildCommandLineApp" %sourceFiles%
 EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
