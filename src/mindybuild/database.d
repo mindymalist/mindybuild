@@ -170,7 +170,7 @@ struct Database {
 
 	public @safe {
 		void toString(void delegate(string) @safe sink) const {
-			sink("# com.mindymalist.mindybuild.database\n");
+			sink("# com.mindymalist.mindybuild.database : v1\n");
 
 			foreach (entry; _data) {
 				entry.key.writeTo(sink);
@@ -209,6 +209,14 @@ struct Database {
 ///
 class DatabaseException : Exception {
 	private this(string msg, string file = __FILE__, size_t line = __LINE__) @safe pure nothrow @nogc {
+		super(msg, file, line);
+	}
+}
+
+///
+final class UnsupportedDatabaseFormatException : Exception {
+	private this(string file = __FILE__, size_t line = __LINE__) @safe pure nothrow @nogc {
+		static immutable msg = "Unsupported database format.";
 		super(msg, file, line);
 	}
 }
@@ -375,7 +383,7 @@ private struct Parser {
 
 	public @safe pure {
 		bool empty() {
-			return _lexer.empty;
+			return (_front.key == null);
 		}
 
 		Entry front() {
@@ -389,9 +397,8 @@ private struct Parser {
 		private void loadFront() {
 			alias Type = Lexer.Token.Type;
 
-			_lexer.skipComments();
-
 			if (_lexer.empty) {
+				_front.key = null;
 				return;
 			}
 
@@ -444,6 +451,10 @@ private struct Parser {
 			if (_lexer.empty) {
 				throw UnexpectedEndOfFileException.make!(Type.eol)();
 			}
+			if (_lexer.front.type != Type.eol) {
+				throw new UnexpectedTokenException(_lexer.front, Type.eol.name);
+			}
+			_lexer.popFront();
 
 			_front = Entry(key, value);
 		}
@@ -501,13 +512,14 @@ private struct Parser {
 private struct Lexer {
 
 	private {
+		static immutable _formatIdentifier = "# com.mindymalist.mindybuild.database : v1";
 		char[] _data;
 		Token _front;
 	}
 
 	public this(char[] data) @safe pure {
 		_data = data;
-		this.popFront();
+		this.loadFrontInitial();
 	}
 
 	public @safe pure {
@@ -520,20 +532,7 @@ private struct Lexer {
 		}
 
 		void popFront() {
-			if (_data.length == 0) {
-				_data = null;
-			}
-
-			_front = this.loadFront();
-		}
-
-		void skipComments() {
-			for (; !this.empty; this.popFront()) {
-				const skip = ((_front.type == Token.Type.comment) || (_front.type == Token.Type.eol));
-				if (!skip) {
-					return;
-				}
-			}
+			return this.loadFront();
 		}
 	}
 
@@ -544,7 +543,39 @@ private struct Lexer {
 			return result;
 		}
 
-		Token loadFront() {
+		void loadFrontInitial() {
+			if (_data.length == 0) {
+				_data = null;
+				return;
+			}
+
+			if (_data[0] == '#') {
+				const idxEOL = _data.indexOf('\n');
+				if (idxEOL != ptrdiff_t(_formatIdentifier.length)) {
+					throw new UnsupportedDatabaseFormatException();
+				}
+
+				const foundFormatIdentifier = (() @trusted => _data.ptr[0 .. _formatIdentifier.length])();
+				if (foundFormatIdentifier != _formatIdentifier) {
+					throw new UnsupportedDatabaseFormatException();
+				}
+
+				_data = (() @trusted => _data.ptr[(idxEOL + 1) .. _data.length])();
+			}
+
+			_front = this.fetchFront();
+		}
+
+		void loadFront() {
+			if (_data.length == 0) {
+				_data = null;
+				return;
+			}
+
+			_front = this.fetchFront();
+		}
+
+		Token fetchFront() {
 			if (_data.length == 0) {
 				return Token(Token.Type.invalid, null);
 			}
@@ -553,9 +584,6 @@ private struct Lexer {
 			switch (c) {
 				case '\n':
 					return this.makeToken(Token.Type.eol, 1);
-
-				case '#':
-					return this.lexComment();
 
 				case ':':
 					return this.makeToken(Token.Type.colon, 1);
@@ -600,16 +628,6 @@ private struct Lexer {
 			return this.makeToken(type, keyword.length);
 		}
 
-		Token lexComment() {
-			foreach (idx, c; _data) {
-				if (c == '\n') {
-					return this.makeToken(Token.Type.comment, idx);
-				}
-			}
-
-			return this.makeToken(Token.Type.comment, _data.length);
-		}
-
 		Token lexString() {
 			_data = _data[1 .. $];
 
@@ -638,7 +656,6 @@ private struct Lexer {
 		enum Type {
 			invalid,
 			eol,
-			comment,
 			colon,
 			literalString,
 			literalBoolFalse,
@@ -655,8 +672,6 @@ private string name(in Lexer.Token.Type type) @safe pure nothrow @nogc {
 			return "error";
 		case eol:
 			return "end of line";
-		case comment:
-			return "comment";
 		case colon:
 			return "colon";
 		case literalString:
@@ -672,7 +687,7 @@ private string name(in Lexer.Token.Type type) @safe pure nothrow @nogc {
 }
 
 @safe unittest {
-	char[] src = `# com.mindymalist.mindybuild.database
+	char[] src = `# com.mindymalist.mindybuild.database : v1
 "foo":"bar"
 "foobar":"foo
 bar"
@@ -681,6 +696,7 @@ bar"
 "40"
 "2000"
 ]
+" ":""
 "bool[0]":false
 "bool[1]":true
 `.dup;
@@ -690,11 +706,13 @@ bar"
 	assert(!db.has("bar"));
 	assert(db.has("foobar"));
 	assert(db.has("array"));
+	assert(db.has(" "));
 	assert(db.has("bool[0]"));
 	assert(db.has("bool[1]"));
 	assert(db.get("foo") == DatabaseValue("bar"));
 	assert(db.get("foobar") == DatabaseValue("foo\nbar"));
 	assert(db.get("array") == DatabaseValue(["10", "40", "2000"]));
+	assert(db.get(" ") == DatabaseValue(""));
 	assert(db.get("bool[0]") == DatabaseValue(false));
 	assert(db.get("bool[1]") == DatabaseValue(true));
 }
