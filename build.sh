@@ -6,14 +6,16 @@ has_command() {
 	return $?
 }
 use_dc() {
-	if [ "$DC" = "dmd" ] || [ "$DC" = "ldmd2" ] || [ "$DC" = "ldmd" ] || [ "$DC" = "gdmd" ]; then
+	bn="$(basename "${DC}")"
+
+	if [ "$bn" = "dmd" ] || [ "$bn" = "ldmd2" ] || [ "$bn" = "ldmd" ] || [ "$bn" = "gdmd" ]; then
 		export DMD="$DC"
 		use_dmd
 		return $?
-	elif [ "$DC" = "gdc" ]; then
+	elif [ "$bn" = "gdc" ]; then
 		use_gdc
 		return $?
-	elif [ "$DC" = "ldc2" ] || [ "$DC" = "ldc" ]; then
+	elif [ "$bn" = "ldc2" ] || [ "$bn" = "ldc" ]; then
 		use_ldc
 		return $?
 	else
@@ -23,17 +25,17 @@ use_dc() {
 }
 use_dmd() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O"
-	$DMD $DFLAGS   -of"bin/mindybuild" -od"bin" -I"src"    -version="${version}" $sourceFiles
+	"$DMD" $DFLAGS   -of"bin/mindybuild" -od"bin" -I"src"    -version="${version}" $sourceFiles
 	return $?
 }
 use_gdc() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
-	$DC  $DFLAGS  -o  "bin/mindybuild"          -I"src"   -fversion="${version}" $sourceFiles
+	"$DC"  $DFLAGS  -o  "bin/mindybuild"          -I"src"   -fversion="${version}" $sourceFiles
 	return $?
 }
 use_ldc() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
-	$DC  $DFLAGS --of="bin/mindybuild"          -I"src" --d-version="${version}" $sourceFiles
+	"$DC"  $DFLAGS --of="bin/mindybuild"          -I"src" --d-version="${version}" $sourceFiles
 	return $?
 }
 

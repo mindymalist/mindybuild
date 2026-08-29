@@ -46,25 +46,26 @@ EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_dc
+FOR /F "delims=" %%i in (%DC%) DO SET bn=%%~ni
 SET "_dmd="
-IF /I [%DC%] == [dmd]   SET _dmd=1
-IF /I [%DC%] == [ldmd2] SET _dmd=1
-IF /I [%DC%] == [ldmd]  SET _dmd=1
-IF /I [%DC%] == [gdmd]  SET _dmd=1
+IF /I [%bn%] == [dmd]   SET _dmd=1
+IF /I [%bn%] == [ldmd2] SET _dmd=1
+IF /I [%bn%] == [ldmd]  SET _dmd=1
+IF /I [%bn%] == [gdmd]  SET _dmd=1
 IF [%_dmd%] NEQ [] (
 	SET DMD=%DC%
 	CALL :use_dmd
 	EXIT /B %ERRORLEVEL%
 )
 
-IF /I [%DC%] == [gdc] (
+IF /I [%bn%] == [gdc] (
 	CALL :use_gdc
 	EXIT /B %ERRORLEVEL%
 )
 
 SET "_ldc="
-IF /I [%DC%] == [ldc2] SET _ldc=1
-IF /I [%DC%] == [ldc]  SET _ldc=1
+IF /I [%bn%] == [ldc2] SET _ldc=1
+IF /I [%bn%] == [ldc]  SET _ldc=1
 IF [%_ldc%] NEQ [] (
 	CALL :use_ldc
 	EXIT /B %ERRORLEVEL%
