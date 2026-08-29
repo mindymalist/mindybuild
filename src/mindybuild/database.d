@@ -452,36 +452,44 @@ private struct Parser {
 			alias Type = Lexer.Token.Type;
 
 			assert(_lexer.front.type == Type.braceSquareOpen);
+			_lexer.popFront();
+
+			if (_lexer.empty) {
+				throw UnexpectedEndOfFileException.make!(Type.eol)();
+			}
+			if (_lexer.front.type != Type.eol) {
+				throw new UnexpectedTokenException(_lexer.front, Type.eol.name);
+			}
+			_lexer.popFront();
 
 			auto result = appender!(string[]);
 
 			while (true) {
-				_lexer.popFront();
-
 				if (_lexer.empty) {
 					throw UnexpectedEndOfFileException.make!(Type.literalString)();
 				}
-
 				if (_lexer.front.type != Type.literalString) {
 					throw new UnexpectedTokenException(_lexer.front, Type.literalString.name);
 				}
-
 				const value = (() @trusted => cast(string) _lexer.front.data)();
-
 				_lexer.popFront();
+
 				if (_lexer.empty) {
 					throw UnexpectedEndOfFileException.make!(Type.braceSquareClose)();
 				}
+				if (_lexer.front.type != Type.eol) {
+					throw new UnexpectedTokenException(_lexer.front, Type.eol.name);
+				}
+				_lexer.popFront();
 
 				result ~= value;
 
+				if (_lexer.empty) {
+					throw UnexpectedEndOfFileException.make!(Type.braceSquareClose)();
+				}
 				if (_lexer.front.type == Type.braceSquareClose) {
 					_lexer.popFront();
 					break;
-				}
-
-				if (_lexer.front.type != Type.comma) {
-					throw new UnexpectedTokenException(_lexer.front, Type.braceSquareClose.name);
 				}
 			}
 
@@ -548,9 +556,6 @@ private struct Lexer {
 
 				case '#':
 					return this.lexComment();
-
-				case ',':
-					return this.makeToken(Token.Type.comma, 1);
 
 				case ':':
 					return this.makeToken(Token.Type.colon, 1);
@@ -634,7 +639,6 @@ private struct Lexer {
 			invalid,
 			eol,
 			comment,
-			comma,
 			colon,
 			literalString,
 			literalBoolFalse,
@@ -653,8 +657,6 @@ private string name(in Lexer.Token.Type type) @safe pure nothrow @nogc {
 			return "end of line";
 		case comment:
 			return "comment";
-		case comma:
-			return "comma";
 		case colon:
 			return "colon";
 		case literalString:
@@ -674,7 +676,11 @@ private string name(in Lexer.Token.Type type) @safe pure nothrow @nogc {
 "foo":"bar"
 "foobar":"foo
 bar"
-"array":["10","40","2000"]
+"array":[
+"10"
+"40"
+"2000"
+]
 "bool[0]":false
 "bool[1]":true
 `.dup;
