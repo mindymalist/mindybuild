@@ -12,13 +12,13 @@
 module mindybuild.configure;
 
 import mindybuild.common;
+import mindybuild.fcompat;
 import mindybuild.kapenparse;
 
 import std.array;
 import std.conv;
 import File = std.file;
 import Meta = std.meta;
-import std.path;
 import std.stdio : FileHandle = File;
 
 ///
@@ -65,16 +65,16 @@ immutable struct Conventions {
 	static immutable {
 
 		auto projectRootSentinelsPrimary = [
-			Sentinel(".mindybuild", Sentinel.Type.directory),
-			Sentinel(".mindybuild-root", Sentinel.Type.file),
+			immutable(Sentinel)(".mindybuild", Sentinel.Type.directory),
+			immutable(Sentinel)(".mindybuild-root", Sentinel.Type.file),
 		];
 		auto projectRootSentinelsSecondary = [
-			Sentinel(".git", Sentinel.Type.directory),
-			Sentinel(".gitignore", Sentinel.Type.file),
-			Sentinel(".hg", Sentinel.Type.directory),
-			Sentinel(".hgignore", Sentinel.Type.file),
-			Sentinel("dub.json", Sentinel.Type.file),
-			Sentinel("dub.sdl", Sentinel.Type.file),
+			immutable(Sentinel)(".git", Sentinel.Type.directory),
+			immutable(Sentinel)(".gitignore", Sentinel.Type.file),
+			immutable(Sentinel)(".hg", Sentinel.Type.directory),
+			immutable(Sentinel)(".hgignore", Sentinel.Type.file),
+			immutable(Sentinel)("dub.json", Sentinel.Type.file),
+			immutable(Sentinel)("dub.sdl", Sentinel.Type.file),
 		];
 
 		auto buildUnitRootSentinelsPrimary = [
@@ -245,7 +245,6 @@ void writeMakefile(const Recipe recipe) {
 
 BuildUnit collectBuildUnit(string path) {
 	import std.array : array;
-	import std.path;
 
 	auto result = BuildUnit();
 
@@ -258,9 +257,9 @@ BuildUnit collectBuildUnit(string path) {
 		path, sourceFiles, importDirs, stringDirs
 	);
 
-	result.paths.input.source = sourceFiles[];
-	result.paths.input.import_ = importDirs[];
-	result.paths.input.stringImport = stringDirs[];
+	result.paths.input.source = sourceFiles.data;
+	result.paths.input.import_ = importDirs.data;
+	result.paths.input.stringImport = stringDirs.data;
 
 	return result;
 }
@@ -272,7 +271,6 @@ private void collectFilesByPurpose(
 	ref Appender!(str[]) stringDirs,
 ) @safe {
 	import std.array : array;
-	import std.path;
 
 	bool pathAsImportDirAdded = false;
 	void addPathAsImportDir() {
@@ -300,7 +298,7 @@ private void collectFilesByPurpose(
 	}
 
 	() @trusted /* ← DMD < 2.114 */ {
-		foreach (file; File.dirEntries(path, File.SpanMode.shallow)) {
+		foreach (file; dirEntries(path, File.SpanMode.shallow)) {
 			() @safe {
 				if (file.isFile) {
 					if (file.name.isDSourceFile) {
@@ -358,10 +356,10 @@ private void collectFilesByPurpose(
 private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles) {
 	static immutable parent = dirSeparator ~ "..";
 
-	for (auto path = appender!string(pathStartingPoint); !isRoot(path[]); path ~= parent) {
+	for (auto path = appender!string(pathStartingPoint); !isRoot(path.data); path ~= parent) {
 		foreach (needle; needles) {
 			bool found = false;
-			auto filePath = chainPath(path[], needle.filename);
+			auto filePath = path.data.buildPath(needle.filename);
 			try {
 				found = File.exists(filePath);
 			}
@@ -373,13 +371,13 @@ private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles)
 				final switch (needle.type) {
 					case Sentinel.Type.file:
 						if (File.isFile(filePath)) {
-							return path.array;
+							return path.data;
 						}
 						break;
 
 					case Sentinel.Type.directory:
 						if (File.isDir(filePath)) {
-							return path.array;
+							return path.data;
 						}
 						break;
 				}
@@ -392,7 +390,6 @@ private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles)
 
 bool isRoot(str path) {
 	import std.algorithm.comparison : cmp;
-	import std.path;
 
 	const compared = cmp(
 		chainPath(path, ".").asAbsolutePath.asNormalizedPath,
@@ -402,10 +399,8 @@ bool isRoot(str path) {
 	return (compared == 0);
 }
 
-str fileExtensionOf(str filename) {
-	import std.path : extension;
-
-	return extension(filename);
+private {
+	alias fileExtensionOf = std.path.extension;
 }
 
 bool isDSourceFile(str filename) {

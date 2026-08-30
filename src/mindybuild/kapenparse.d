@@ -60,7 +60,7 @@ const(str)[] parseModuleName(str sourceCode) @safe pure {
 				}
 
 				if (lexer.front.type == Type.semicolon) {
-					return result[];
+					return result.data;
 				}
 
 				// edition identifier?
@@ -74,7 +74,7 @@ const(str)[] parseModuleName(str sourceCode) @safe pure {
 						throw new ParserException("Unexpected token; semicolon expected.");
 					}
 
-					return result[];
+					return result.data;
 				}
 
 				if (lexer.front.type != Type.dot) {
@@ -368,7 +368,7 @@ struct Lexer {
 		}
 
 		Token lexLiteralString() {
-			static ptrdiff_t scanForClosingDoubleQuote(str input) {
+			static ptrdiff_t scanForClosingDoubleQuote(str input) nothrow @nogc {
 				bool prevWasBackslash = false;
 				foreach (idx, c; input) {
 					if (prevWasBackslash) {
@@ -387,7 +387,7 @@ struct Lexer {
 				return -1;
 			}
 
-			static ptrdiff_t scanForClosingDoubleQuoteR(str input) {
+			static ptrdiff_t scanForClosingDoubleQuoteR(str input) nothrow @nogc {
 				foreach (idx, c; input) {
 					if (c == '"') {
 						return idx;
@@ -397,7 +397,7 @@ struct Lexer {
 				return -1;
 			}
 
-			static ptrdiff_t scanForClosingBacktick(str input) {
+			static ptrdiff_t scanForClosingBacktick(str input) nothrow @nogc {
 				foreach (idx, c; input) {
 					if (c == '`') {
 						return idx;
@@ -407,7 +407,7 @@ struct Lexer {
 				return -1;
 			}
 
-			static ptrdiff_t scanForClosingCurlyBrace(str input) {
+			static ptrdiff_t scanForClosingCurlyBrace(str input) nothrow @nogc {
 				size_t level = 1;
 				foreach (idx, c; input) {
 					if (c == '{') {

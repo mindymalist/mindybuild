@@ -160,7 +160,7 @@ template runMindybuildCommandLineApp() {
 				}
 				catch (Exception ex) {
 					status = status.error;
-					stderr.writeln(file, ": ", ex.message);
+					stderr.writeln(file, ": ", ex.msg);
 					continue;
 				}
 
@@ -170,7 +170,7 @@ template runMindybuildCommandLineApp() {
 				}
 				catch (ParserException ex) {
 					status = Status.error;
-					stderr.writeln(file, ": ", ex.message);
+					stderr.writeln(file, ": ", ex.msg);
 					continue;
 				}
 

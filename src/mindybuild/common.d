@@ -11,6 +11,8 @@
  +/
 module mindybuild.common;
 
+import mindybuild.fcompat;
+
 ///
 alias str = const(char)[];
 
@@ -34,17 +36,14 @@ pragma(inline, true) @safe pure nothrow @nogc {
 	}
 }
 
-void writeException(Sink)(Sink sink, Exception exception) {
-	sink.put(exception.message);
+package(mindybuild) void writeException(Sink)(Sink sink, Exception exception) {
+	sink.put(exception.msg);
 	sink.put("\n");
 
-	auto next = exception.next;
-	if (next !is null) {
-		foreach (ex; next) {
-			sink.put("\t");
-			sink.put(ex.message);
-			sink.put("\n");
-		}
+	for (auto next = exception.next; next !is null; next = next.next) {
+		sink.put("\t");
+		sink.put(next.msg);
+		sink.put("\n");
 	}
 }
 
@@ -60,7 +59,16 @@ struct CodePrinter {
 	}
 
 	private template isString(T) {
-		import std.traits : Unconst;
+		static import std.traits;
+
+		static if (__traits(hasMember, std.traits, "Unconst")) {
+			alias Unconst = std.traits.Unconst;
+		}
+		else {
+			static import core.internal.traits;
+
+			alias Unconst = core.internal.traits.Unconst;
+		}
 
 		enum bool isString = (is(Unconst!T == string) || is(T == str));
 	}
@@ -162,7 +170,7 @@ struct CodePrinter {
 	}
 
 	public string toString() const {
-		return _appender[];
+		return _appender.data;
 	}
 }
 
@@ -317,10 +325,17 @@ template TaggedUnion(Types...) {
 
 		private static union Storage {
 			enum string memberName(size_t idx) = "value" ~ idx.stringof;
+			enum membersString = () {
+				import std.traits : fullyQualifiedName;
 
-			static foreach (idx, T; Types) {
-				mixin(`T ` ~ memberName!idx ~ `;`);
-			}
+				string result = "";
+				foreach (idx, T; Types) {
+					result ~= fullyQualifiedName!T ~ " " ~ memberName!idx ~ ";\n";
+				}
+				return result;
+			}();
+
+			mixin(membersString);
 		}
 	}
 
@@ -709,7 +724,11 @@ struct LocationHumanReadable {
 	size_t column;
 
 	///
-	static typeof(this) fromLocation(const Location location) @safe pure {
+	static typeof(this) fromLocation(const Location location) @trusted pure {
+		return assumePure(&fromLocationImpl)(location);
+	}
+
+	private static typeof(this) fromLocationImpl(const Location location) @safe {
 		import std.uni;
 
 		size_t cntLine = 1;
@@ -745,7 +764,8 @@ struct LocationHumanReadable {
 				}
 			}
 
-			if (g[] == "\u2028" || g[] == "\u2029") {
+			const s = (() @trusted => g[])();
+			if (s == "\u2028" || s == "\u2029") {
 				++cntLine;
 				cntColumn = 1;
 				continue;
@@ -810,8 +830,9 @@ void sliceOffLast(T)(ref T[] data) @trusted pure nothrow @nogc {
 }
 
 ///
-void removeSplice(T)(ref T[] data, size_t indexOfElementToRemove) @trusted pure nothrow @nogc
-in (indexOfElementToRemove < data.length, "Out of range.") {
+void removeSplice(T)(ref T[] data, size_t indexOfElementToRemove) @trusted pure nothrow @nogc {
+	assert(indexOfElementToRemove < data.length, "Out of range.");
+
 	const last = -1 + data.length;
 
 	if (indexOfElementToRemove < last) {
@@ -898,5 +919,5 @@ str[] splitArgsString(str argsString) @safe {
 		result ~= buffer;
 	}
 
-	return result[];
+	return result.data;
 }

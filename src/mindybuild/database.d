@@ -12,6 +12,7 @@
 module mindybuild.database;
 
 import mindybuild.common;
+import mindybuild.fcompat;
 import std.array;
 import std.conv;
 import std.stdio;
@@ -39,13 +40,17 @@ private struct Entry {
 }
 
 struct DatabaseFile {
+	import core.stdc.stdio;
+
 	private {
 		File _file;
 		Database _db;
 	}
 
 	private this(string filePath) @safe {
-		_file = File(filePath, "a+");
+		import std.string : toStringz;
+
+		_file = File.wrapFile((() @trusted => fopen(filePath.toStringz, "a+"))());
 		(() @trusted => _file.lock())();
 
 		_file.rewind();
@@ -66,9 +71,10 @@ struct DatabaseFile {
 			return;
 		}
 		_file.flush();
-		_file.reopen(null, "w+");
+		auto f = freopen(null, "w+", _file.getFP);
+		_file = File.wrapFile(f);
 		_file.rewind();
-		_db.toString(&_file.lockingBinaryWriter.rawWrite!(const(char)));
+		_db.toString(&_file.lockingTextWriter.put!(string));
 		_file.unlock();
 	}
 }
@@ -105,8 +111,8 @@ struct Database {
 		}
 
 		///
-		inout(DatabaseValue) get(str key) inout {
-			return _index[key].value;
+		inout(DatabaseValue) get(str key) inout @trusted {
+			return assumeNoGC(&getImpl)(key);
 		}
 
 		///
@@ -182,7 +188,7 @@ struct Database {
 		string toString() const {
 			auto result = appender!string;
 			this.toString(&result.put!string);
-			return result[];
+			return result.data;
 		}
 	}
 
@@ -202,6 +208,12 @@ struct Database {
 
 		void rebuildIndex() @trusted {
 			_index = buildIndex(_data);
+		}
+	}
+
+	private {
+		inout(DatabaseValue) getImpl(str key) inout @safe pure nothrow {
+			return _index[key].value;
 		}
 	}
 }
@@ -228,7 +240,7 @@ final class UnexpectedTokenException : DatabaseException {
 		string expected,
 		string file = __FILE__, size_t line = __LINE__
 	) @safe pure nothrow {
-		bool shallPrintData(Lexer.Token.Type type) {
+		bool shallPrintData(Lexer.Token.Type type) nothrow {
 			switch (type) with (Lexer.Token.Type) {
 				case braceSquareClose:
 				case braceSquareOpen:
@@ -266,10 +278,7 @@ final class UnexpectedEndOfFileException : DatabaseException {
 		super(msg, file, line);
 	}
 
-	private this(
-		string file = __FILE__, size_t line = __LINE__,
-		string msg,
-	) @safe pure nothrow @nogc {
+	private this(string file, size_t line, string msg) @safe pure nothrow @nogc {
 		super(msg, file, line);
 	}
 
@@ -504,7 +513,7 @@ private struct Parser {
 				}
 			}
 
-			return result[];
+			return result.data;
 		}
 	}
 }
