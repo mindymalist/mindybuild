@@ -19,5 +19,12 @@
 			"name": "library",
 			"targetType": "library"
 		}
-	]
+	],
+
+	"buildTypes": {
+		"prod": {
+			"buildOptions": ["inline", "optimize"],
+			"buildRequirements": ["allowWarnings", "requireBoundsCheck", "requireContracts"]
+		}
+	}
 }
