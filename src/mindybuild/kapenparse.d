@@ -91,6 +91,42 @@ const(str)[] parseModuleName(str sourceCode) @safe pure {
 	return null;
 }
 
+@safe unittest {
+	import std.exception;
+
+	assert(parseModuleName("") is null);
+	assert(parseModuleName("\n") is null);
+
+	assert(parseModuleName("module app;\n") == ["app"]);
+	assert(parseModuleName("\nmodule app;\n") == ["app"]);
+	assert(parseModuleName("module app;") == ["app"]);
+	assert(parseModuleName("module foo.bar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("module foo.bar;") == ["foo", "bar"]);
+
+	assert(parseModuleName("deprecated\nmodule foo.bar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("deprecated(\"Use `foobar` instead.\")\nmodule foo.bar;\n") == ["foo", "bar"]);
+
+	assert(parseModuleName("/++\n\tdoc comment\n +/\nmodule foo.bar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("/++\n\tdoc comment\n +/\nmodule foo\n\n.bar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("/++\n\tdoc comment\n +/\nmodule foo.\n\nbar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("/++\n\tdoc comment\n +/\nmodule foo\n.\n\nbar;\n") == ["foo", "bar"]);
+	assert(parseModuleName("/++\n\tdoc comment\n +/\nmodule foo\n.\n\nbar;\n") == ["foo", "bar"]);
+
+	enum helloWorld = "import std.stdio;\nvoid main(string[] args) {\n\twriteln(\"Hello world\");\n}\n";
+	assert(parseModuleName(helloWorld) is null);
+	assert(parseModuleName("module myapp;\n\n" ~ helloWorld) == ["myapp"]);
+
+	assert(parseModuleName("module myapp;\n\n1234 invalid --> syntax error\nbut irrelevant\n") == ["myapp"]);
+
+	assertThrown!ParserException(parseModuleName("module\n"));
+	assertThrown!ParserException(parseModuleName("module"));
+	assertThrown!ParserException(parseModuleName("module;\n"));
+	assertThrown!ParserException(parseModuleName("module ;\n"));
+
+	assertThrown!ParserException(parseModuleName("module foo..bar;\n"));
+	assertThrown!ParserException(parseModuleName("module foo.\n.bar;\n"));
+}
+
 ///
 final class ParserException : Exception {
 	private this(string message, string file = __FILE__, size_t line = __LINE__) @safe pure nothrow @nogc {
