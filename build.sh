@@ -25,17 +25,17 @@ use_dc() {
 }
 use_dmd() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O"
-	"$DMD" $DFLAGS   -of"bin/mindybuild" -od"bin" -I"src"    -version="${version}" $sourceFiles
+	"$DMD" $DFLAGS   -of"bin/mindybuild" -od"bin" -I"src"    -version="${version}"            $sourceFiles
 	return $?
 }
 use_gdc() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
-	"$DC"  $DFLAGS  -o  "bin/mindybuild"          -I"src"   -fversion="${version}" $sourceFiles
+	"$DC"  $DFLAGS  -o  "bin/mindybuild"          -I"src"   -fversion="${version}"            $sourceFiles
 	return $?
 }
 use_ldc() {
 	[ -z "${DFLAGS+x}" ] && export DFLAGS="-O2"
-	"$DC"  $DFLAGS --of="bin/mindybuild"          -I"src" --d-version="${version}" $sourceFiles
+	"$DC"  $DFLAGS --of="bin/mindybuild"          -I"src" --d-version="${version}" -singleobj $sourceFiles
 	return $?
 }
 
@@ -58,7 +58,7 @@ sourceFiles="\
 
 if [ -n "${DC+x}" ]; then
 	use_dc
-	return $?
+	exit $?
 elif [ -n "${DMD+x}" ]; then
 	use_dmd
 	return $?
@@ -70,8 +70,8 @@ elif has_command "dmd"; then
 	export DC="dmd"
 else
 	echo "No suitable D compiler found."
-	return 1
+	exit 1
 fi
 
 use_dc
-return $?
+exit $?

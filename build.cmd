@@ -79,17 +79,17 @@ EXIT /B 1
 REM ============================================================================
 :use_dmd
 IF [%DFLAGS%] == [] SET DFLAGS=-O
-%DMD% %DFLAGS%   -of"bin/mindybuild.exe" -od"bin" -I"src"    -version="MindybuildCommandLineApp" %sourceFiles%
+%DMD% %DFLAGS%   -of"bin/mindybuild.exe" -od"bin" -I"src"    -version="MindybuildCommandLineApp"            %sourceFiles%
 EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_gdc
 IF [%DFLAGS%] == [] SET DFLAGS=-O2
-%DC%  %DFLAGS%  -o  "bin/mindybuild.exe"          -I"src"   -fversion="MindybuildCommandLineApp" %sourceFiles%
+%DC%  %DFLAGS%  -o  "bin/mindybuild.exe"          -I"src"   -fversion="MindybuildCommandLineApp"            %sourceFiles%
 EXIT /B %ERRORLEVEL%
 
 REM ============================================================================
 :use_ldc
 IF [%DFLAGS%] == [] SET DFLAGS=-O2
-%DC%  %DFLAGS% --of="bin/mindybuild.exe"          -I"src" --d-version="MindybuildCommandLineApp" %sourceFiles%
+%DC%  %DFLAGS% --of="bin/mindybuild.exe"          -I"src" --d-version="MindybuildCommandLineApp" -singleobj %sourceFiles%
 EXIT /B %ERRORLEVEL%
