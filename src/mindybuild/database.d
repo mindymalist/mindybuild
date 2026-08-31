@@ -175,17 +175,20 @@ struct Database {
 	}
 
 	public @safe {
+		///
 		void toString(void delegate(string) @safe sink) const {
 			sink("# com.mindymalist.mindybuild.database : v1\n");
 
 			foreach (entry; _data) {
 				entry.key.writeTo(sink);
-				sink(": ");
-
+				sink(":");
+				entry.value.writeTo(sink);
+				sink("\n");
 			}
 		}
 
-		string toString() const {
+		///
+		override string toString() const {
 			auto result = appender!string;
 			this.toString(&result.put!string);
 			return result.data;
@@ -328,6 +331,7 @@ private void writeTo(string value, void delegate(string) @safe sink) @safe {
 
 				if ((idx + 1) == value.length) {
 					sink(value);
+					value = null;
 				}
 			}
 		}
@@ -346,15 +350,15 @@ private void writeTo(bool value, void delegate(string) @safe sink) @safe {
 }
 
 private void writeTo(string[] value, void delegate(string) @safe sink) @safe {
-	sink("[");
+	sink("[\n");
 
 	foreach (idx, v; value) {
 		v.writeTo(sink);
+		sink("\n");
 
 		if ((idx + 1) == value.length) {
 			break;
 		}
-		sink(", ");
 	}
 
 	sink("]");
@@ -644,6 +648,13 @@ private struct Lexer {
 				const c = (() @trusted => _data.ptr[idx])();
 
 				if (c == '\\') {
+					if (_data.length < 2) {
+						throw new DatabaseException("Corrupt database file: Incomplete escape sequence.");
+					}
+					const cP1 = (() @trusted => _data.ptr[idx + 1])();
+					if ((cP1 != '"') && (cP1 != '\\')) {
+						throw new DatabaseException("Corrupt database file: Invalid escape sequence `\\" ~ cP1 ~ "`.");
+					}
 					_data.removeSplice(idx);
 				}
 				else if (c == '"') {
@@ -696,7 +707,7 @@ private string name(in Lexer.Token.Type type) @safe pure nothrow @nogc {
 }
 
 @safe unittest {
-	char[] src = `# com.mindymalist.mindybuild.database : v1
+	immutable src = `# com.mindymalist.mindybuild.database : v1
 "foo":"bar"
 "foobar":"foo
 bar"
@@ -708,10 +719,11 @@ bar"
 " ":""
 "bool[0]":false
 "bool[1]":true
-"foo\"bar":"\fo\o\\bar\\"
-`.dup;
+"foo\"bar":"\\foo\\bar\\"
+`;
 
-	auto db = openDatabase(src);
+	char[] srcR = src.dup;
+	auto db = openDatabase(srcR);
 	assert(db.has("foo"));
 	assert(!db.has("bar"));
 	assert(db.has("foobar"));
@@ -726,5 +738,7 @@ bar"
 	assert(db.get(" ") == DatabaseValue(""));
 	assert(db.get("bool[0]") == DatabaseValue(false));
 	assert(db.get("bool[1]") == DatabaseValue(true));
-	assert(db.get(`foo"bar`) == DatabaseValue(`foo\bar\`));
+	assert(db.get(`foo"bar`) == DatabaseValue(`\foo\bar\`));
+
+	assert(db.toString() == src);
 }
