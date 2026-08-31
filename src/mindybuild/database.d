@@ -17,14 +17,15 @@ import std.array;
 import std.conv;
 import std.stdio;
 
-DatabaseFile* openDatabaseFile(string filePath) {
-	return new DatabaseFile(filePath);
+///
+DatabaseFile!(mode)* openDatabaseFile(DatabaseFileMode mode)(string filePath) {
+	return new DatabaseFile!mode(filePath);
 }
 
 private Database openDatabase(char[] data) @trusted {
 	auto entries = Parser(Lexer(data)).array;
 	auto index = Database.buildIndex(entries);
-	return Database(entries, index);
+	return new Database(entries, index);
 }
 
 ///
@@ -34,53 +35,105 @@ alias DatabaseValue = TaggedUnion!(
 	string[],
 );
 
-private struct Entry {
+///
+struct Entry {
+	///
 	string key;
+
+	///
 	DatabaseValue value;
 }
 
-struct DatabaseFile {
+enum DatabaseFileMode : bool {
+	///
+	readOnly,
+
+	///
+	readWrite,
+}
+
+///
+struct DatabaseFile(DatabaseFileMode mode) {
 	import core.stdc.stdio;
 
 	private {
+		alias Mode = DatabaseFileMode;
+		string _filePath;
+
 		File _file;
 		Database _db;
 	}
 
 	private this(string filePath) @safe {
-		import std.string : toStringz;
-
-		_file = File.wrapFile((() @trusted => fopen(filePath.toStringz, "a+"))());
-		(() @trusted => _file.lock())();
-
-		_file.rewind();
-		auto buffer = new ubyte[](_file.size);
-		buffer = (() @trusted => _file.rawRead(buffer))();
-
-		() @trusted {
-			auto entries = Parser(Lexer(cast(char[]) buffer)).array();
-			auto index = Database.buildIndex(entries);
-			_db = Database(entries, index);
-		}();
+		_filePath = filePath;
+		this.open();
 	}
 
-	@disable this(this);
+	private ~this() @safe {
+		this.close();
+	}
 
-	public ~this() {
-		if (!_file.isOpen) {
-			return;
+	private @disable this(this);
+
+	public @safe pure nothrow @nogc {
+		static if (mode == Mode.readOnly) {
+			///
+			const(Database) database() const {
+				return _db;
+			}
 		}
-		_file.flush();
-		auto f = freopen(null, "w+", _file.getFP);
-		_file = File.wrapFile(f);
-		_file.rewind();
-		_db.toString(&_file.lockingTextWriter.put!(string));
-		_file.unlock();
+		static if (mode == Mode.readWrite) {
+			///
+			inout(Database) database() inout {
+				return _db;
+			}
+		}
+	}
+
+	private @safe {
+		void open() {
+			import std.string : toStringz;
+
+			if ((mode == Mode.readOnly) && !_filePath.exists) {
+				_db = new Database(null, null);
+			}
+
+			enum openMode = (mode == Mode.readWrite) ? "a+" : "r";
+			_file = File.wrapFile((() @trusted => fopen(_filePath.toStringz, openMode))());
+			(() @trusted => _file.lock())();
+
+			_file.rewind();
+			auto buffer = new ubyte[](_file.size);
+			buffer = (() @trusted => _file.rawRead(buffer))();
+
+			() @trusted {
+				auto entries = Parser(Lexer(cast(char[]) buffer)).array();
+				auto index = Database.buildIndex(entries);
+				_db = new Database(entries, index);
+			}();
+		}
+
+		void close() {
+			if (!_file.isOpen) {
+				return;
+			}
+
+			static if (mode == Mode.readWrite) {
+				_file.flush();
+				auto f = freopen(null, "w+", _file.getFP);
+				_file = File.wrapFile(f);
+				_file.rewind();
+				_db.toString(&_file.lockingTextWriter.put!(string));
+			}
+
+			(() @trusted => _file.unlock())();
+			_file.close();
+		}
 	}
 }
 
 ///
-struct Database {
+final class Database {
 
 	private {
 		alias Index = Entry*[string];
@@ -96,13 +149,14 @@ struct Database {
 	}
 
 	///
-	private this(Entry[] data) @safe pure {
+	public this(Entry[] data) @safe pure {
 		_data = data;
 		this.rebuildIndex();
 	}
 
 	///
-	@disable this(this);
+	public this() @safe pure nothrow @nogc {
+	}
 
 	public @safe pure nothrow @nogc {
 		///
@@ -129,6 +183,7 @@ struct Database {
 	}
 
 	public @safe pure nothrow @nogc {
+		///
 		const(Entry)[] opSlice() const {
 			return _data[];
 		}
