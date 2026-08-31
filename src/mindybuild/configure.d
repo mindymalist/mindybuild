@@ -12,6 +12,7 @@
 module mindybuild.configure;
 
 import mindybuild.common;
+import mindybuild.database;
 import mindybuild.fcompat;
 import mindybuild.kapenparse;
 
@@ -164,6 +165,15 @@ struct OutputPaths {
 	str lib = "$(prefix)/lib";
 }
 
+struct ConfigurationDatabase {
+	string name = null;
+
+	bool doNotCollect = false;
+	string[] unitPaths = null;
+
+	string[] ignore = null;
+}
+
 ///
 final class ConfigureException : Exception {
 	private this(
@@ -212,18 +222,37 @@ str determineProjectRoot() {
 Recipe collectBuildRecipe(const str[] args) {
 	auto result = Recipe();
 
-	result.name = baseName(".".asAbsolutePath).array;
+	const db = loadDatabase();
+	if (db.name != "") {
+		result.name = db.name;
+	}
+	else {
+		result.name = baseName(".".asAbsolutePath).array;
+	}
+
 	// TODO
 
+	if (!db.doNotCollect) {
+		result.units = [collectBuildUnit(".")];
+	}
+
 	return result;
+}
+
+ConfigurationDatabase loadDatabase() {
+	foreach (dbFileCandidate; Conventions.projectRootSentinelsPrimary) {
+		if (File.exists(dbFileCandidate)) {
+			return openAndDeserializeDatabase!ConfigurationDatabase(dbFileCandidate);
+		}
+	}
+
+	return ConfigurationDatabase();
 }
 
 void writeMakefile(const Recipe recipe) {
 	// TODO
 	assert(false, "Not implemented.");
 }
-
-@safe:
 
 BuildUnit collectBuildUnit(string path) {
 	import std.array : array;
