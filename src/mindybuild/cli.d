@@ -195,7 +195,7 @@ template runMindybuildCommandLineApp() {
 		}
 	}
 
-	debug void writeExceptionOrigin(File target, Throwable ex) {
+	debug void writeExceptionOrigin(File target, Throwable ex) @trusted {
 		debug target.writeln("\tThrown from ", ex.file, "(", ex.line, ").\n", ex.info);
 	}
 }
