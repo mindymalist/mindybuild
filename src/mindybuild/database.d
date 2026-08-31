@@ -818,7 +818,7 @@ void openAndDeserializeDatabase(T)(string filePath, ref T result)
 if (is(T == struct)) {
 	import std.file : read;
 
-	auto buffer = cast(char[]) read(filePath);
+	auto buffer = (() @trusted => cast(char[])(() @safe => read(filePath))())();
 	deserializeDatabase(buffer, result);
 }
 
