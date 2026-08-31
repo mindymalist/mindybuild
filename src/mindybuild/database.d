@@ -708,6 +708,7 @@ bar"
 " ":""
 "bool[0]":false
 "bool[1]":true
+"foo\"bar":"\fo\o\\bar\\"
 `.dup;
 
 	auto db = openDatabase(src);
@@ -718,10 +719,12 @@ bar"
 	assert(db.has(" "));
 	assert(db.has("bool[0]"));
 	assert(db.has("bool[1]"));
+	assert(db.has(`foo"bar`));
 	assert(db.get("foo") == DatabaseValue("bar"));
 	assert(db.get("foobar") == DatabaseValue("foo\nbar"));
 	assert(db.get("array") == DatabaseValue(["10", "40", "2000"]));
 	assert(db.get(" ") == DatabaseValue(""));
 	assert(db.get("bool[0]") == DatabaseValue(false));
 	assert(db.get("bool[1]") == DatabaseValue(true));
+	assert(db.get(`foo"bar`) == DatabaseValue(`foo\bar\`));
 }
