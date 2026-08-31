@@ -798,3 +798,137 @@ bar"
 
 	assert(db.toString() == src);
 }
+
+final class SerializerException : DatabaseException {
+	private this(string msg, string file = __FILE__, size_t line = __LINE__) @safe pure nothrow @nogc {
+		super(msg, file, line);
+	}
+}
+
+///
+T openAndDeserializeDatabase(T)(string filePath)
+if (is(T == struct)) {
+	auto result = T.init;
+	openAndDeserializeDatabase(filePath, result);
+	return result;
+}
+
+/// ditto
+void openAndDeserializeDatabase(T)(string filePath, ref T result)
+if (is(T == struct)) {
+	import std.file : read;
+
+	auto buffer = cast(char[]) read(filePath);
+	deserializeDatabase(buffer, result);
+}
+
+private void deserializeDatabase(T)(char[] raw, ref T result)
+if (is(T == struct)) {
+
+	foreachEntry: foreach (Entry entry; Parser(Lexer(raw))) {
+		foreach (member; __traits(allMembers, T)) {
+			import std.traits : isSomeFunction;
+
+			// dfmt off
+			enum applicable = (
+				!__traits(compiles, { enum tmp = __traits(getMember, result, member); }) &&
+				!isSomeFunction!(__traits(getMember, result, member))
+			);
+			// dfmt on
+
+			static if (applicable) {
+				if (entry.key == databaseKeyOf!member) {
+					const found = entry.value.tryGet(__traits(getMember, result, member));
+					if (!found) {
+						throw new SerializerException("Unsupported type for entry `" ~ databaseKeyOf!member ~ "`.");
+					}
+					continue foreachEntry;
+				}
+			}
+		}
+	}
+}
+
+private string toDatabaseKey(string value) @safe pure nothrow {
+	import std.ascii : isUpper, toLower;
+
+	string result = "";
+
+	bool prevUpper = true;
+	foreach (c; value) {
+		const upper = c.isUpper;
+
+		if (upper) {
+			if (!prevUpper) {
+				result ~= ' ';
+			}
+			result ~= c.toLower();
+		}
+		else {
+			result ~= c;
+		}
+
+		prevUpper = upper;
+	}
+
+	return result;
+}
+
+@safe unittest {
+	assert(toDatabaseKey("camelCase") == "camel case");
+	assert(toDatabaseKey("PascalCase") == "pascal case");
+	assert(toDatabaseKey("snake_case") == "snake_case");
+}
+
+private enum string databaseKeyOf(string fieldName) = toDatabaseKey(fieldName);
+
+@safe unittest {
+	assert(databaseKeyOf!"camelCase" == "camel case");
+}
+
+@safe unittest {
+	char[] srcR = `# com.mindymalist.mindybuild.database : v1
+"string_":"Oachkatzlschwoaf"
+"bool true":true
+"bool false":false
+"array":[
+"Oachkatzlschwoaf"
+]
+`.dup;
+
+	static struct Target {
+		string notInDataSet = "untouched";
+
+		string string_;
+		bool boolTrue;
+		bool boolFalse;
+		string[] array;
+
+		public this(bool) {
+		}
+
+		public void distraction() {
+		}
+
+		public static void distraction2() {
+		}
+
+		public bool distraction3() {
+			return false;
+		}
+
+		public @property bool distraction4() {
+			return false;
+		}
+
+		enum distraction5 = true;
+	}
+
+	Target target;
+	deserializeDatabase(srcR, target);
+	assert(target.notInDataSet == "untouched");
+	assert(target.string_ == "Oachkatzlschwoaf");
+	assert(target.boolTrue == true);
+	assert(target.boolFalse == false);
+	assert(target.array == ["Oachkatzlschwoaf"]);
+}
