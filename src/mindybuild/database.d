@@ -231,7 +231,7 @@ final class Database {
 
 	public @safe {
 		///
-		void toString(void delegate(string) @safe sink) const {
+		void toString(scope void delegate(string) @safe sink) const {
 			sink("# com.mindymalist.mindybuild.database : v1\n");
 
 			foreach (entry; _data) {
@@ -350,7 +350,7 @@ final class UnexpectedEndOfFileException : DatabaseException {
 	}
 }
 
-private void writeTo(string value, void delegate(string) @safe sink) @safe {
+private void writeTo(string value, scope void delegate(string) @safe sink) @safe {
 	static bool needsEscaping(string value) {
 		foreach (c; value) {
 			if (c == '"') {
@@ -399,12 +399,12 @@ private void writeTo(string value, void delegate(string) @safe sink) @safe {
 	sink("\"");
 }
 
-private void writeTo(bool value, void delegate(string) @safe sink) @safe {
+private void writeTo(bool value, scope void delegate(string) @safe sink) @safe {
 	const s = (value) ? "true" : "false";
 	sink(s);
 }
 
-private void writeTo(string[] value, void delegate(string) @safe sink) @safe {
+private void writeTo(string[] value, scope void delegate(string) @safe sink) @safe {
 	sink("[\n");
 
 	foreach (idx, v; value) {
@@ -419,7 +419,7 @@ private void writeTo(string[] value, void delegate(string) @safe sink) @safe {
 	sink("]");
 }
 
-private void writeTo(DatabaseValue value, void delegate(string) @safe sink) @safe {
+private void writeTo(DatabaseValue value, scope void delegate(string) @safe sink) @safe {
 	string valueString;
 	if (value.tryGet(valueString)) {
 		return valueString.writeTo(sink);
