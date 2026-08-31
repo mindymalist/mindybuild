@@ -39,24 +39,6 @@ int run(FileHandle stderr, string[] args) @safe {
 	return 1;
 }
 
-///
-struct Sentinel {
-	///
-	str filename;
-
-	///
-	Type type;
-
-	///
-	enum Type {
-		///
-		file,
-
-		///
-		directory,
-	}
-}
-
 immutable struct Conventions {
 	@disable this();
 	@disable this(this);
@@ -65,16 +47,16 @@ immutable struct Conventions {
 	static immutable {
 
 		auto projectRootSentinelsPrimary = [
-			immutable(Sentinel)(".mindybuild", Sentinel.Type.directory),
-			immutable(Sentinel)(".mindybuild-root", Sentinel.Type.file),
+			".mindybuild",
+			".mindybuild-root",
 		];
 		auto projectRootSentinelsSecondary = [
-			immutable(Sentinel)(".git", Sentinel.Type.directory),
-			immutable(Sentinel)(".gitignore", Sentinel.Type.file),
-			immutable(Sentinel)(".hg", Sentinel.Type.directory),
-			immutable(Sentinel)(".hgignore", Sentinel.Type.file),
-			immutable(Sentinel)("dub.json", Sentinel.Type.file),
-			immutable(Sentinel)("dub.sdl", Sentinel.Type.file),
+			".git",
+			".gitignore",
+			".hg",
+			".hgignore",
+			"dub.json",
+			"dub.sdl",
 		];
 
 		auto buildUnitRootSentinelsPrimary = [
@@ -353,13 +335,13 @@ private void collectFilesByPurpose(
 	}();
 }
 
-private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles) {
+private str findDirUpstream(string pathStartingPoint, const(string)[] needles) {
 	static immutable parent = dirSeparator ~ "..";
 
 	for (auto path = appender!string(pathStartingPoint); !isRoot(path.data); path ~= parent) {
 		foreach (needle; needles) {
 			bool found = false;
-			auto filePath = path.data.buildPath(needle.filename);
+			auto filePath = path.data.buildPath(needle);
 			try {
 				found = File.exists(filePath);
 			}
@@ -368,19 +350,7 @@ private str findDirUpstream(string pathStartingPoint, const(Sentinel)[] needles)
 			}
 
 			if (found) {
-				final switch (needle.type) {
-					case Sentinel.Type.file:
-						if (File.isFile(filePath)) {
-							return path.data;
-						}
-						break;
-
-					case Sentinel.Type.directory:
-						if (File.isDir(filePath)) {
-							return path.data;
-						}
-						break;
-				}
+				return path.data;
 			}
 		}
 	}
