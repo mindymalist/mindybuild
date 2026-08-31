@@ -96,6 +96,7 @@ struct DatabaseFile(DatabaseFileMode mode) {
 
 			if ((mode == Mode.readOnly) && !_filePath.exists) {
 				_db = new Database(null, null);
+				return;
 			}
 
 			enum openMode = (mode == Mode.readWrite) ? "a+" : "r";
