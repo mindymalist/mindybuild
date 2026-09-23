@@ -43,7 +43,7 @@ mkdir -p bin
 
 if [ -n "${UNITTEST+x}" ]; then
 	version="MindybuildUnittestApp"
-	export DFLAGS="$DFLAGS -unittest"
+	export DFLAGS="$DFLAGS -g -unittest"
 else
 	version="MindybuildCommandLineApp"
 fi
