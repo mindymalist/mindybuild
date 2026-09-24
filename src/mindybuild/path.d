@@ -322,6 +322,76 @@ template RelativePathNormalizer(Platform platform) {
 			_nextFrontSeparator = n;
 		}
 	}
+
+	struct Phase3 {
+		private {
+			Phase2 _data;
+		}
+
+	@safe pure nothrow @nogc:
+
+		public this(Phase2 data) @trusted {
+			_data = data;
+			this.loadFront();
+			this.loadBack();
+		}
+
+		public this(str data) {
+			this(data.Phase0.Phase1.Phase2);
+		}
+
+		public {
+			SubRange!Phase1 back() @system {
+				return _data.back;
+			}
+
+			bool empty() const {
+				return _data.empty;
+			}
+
+			SubRange!Phase1 front() const @system {
+				return _data.front;
+			}
+
+			void popBack() @system {
+				_data.popBack();
+				this.loadBack();
+			}
+
+			void popFront() @system {
+				_data.popFront();
+				this.loadFront();
+			}
+
+			typeof(this) save() {
+				return this;
+			}
+		}
+
+		private {
+			void loadBack() @system {
+				while (!_data.empty) {
+					if ((_data.back.length == 1) && (_data.back.front == '.')) {
+						_data.popBack();
+						continue;
+					}
+
+					return;
+				}
+			}
+			
+			void loadFront() @system {
+				while (!_data.empty) {
+					if ((_data.front.length == 1) && (_data.front.front == '.')) {
+						_data.popFront();
+						continue;
+					}
+
+					return;
+				}
+			}
+		}
+	}
 }
 
 @system unittest {
@@ -357,6 +427,28 @@ template RelativePathNormalizer(Platform platform) {
 
 	assert(0 == cmp(Posix.Phase2(`a/sd/f/`), [`a`, `sd`, `f`]));
 	assert(0 == cmp(Win__.Phase2(`a\sd\f\`), [`a`, `sd`, `f`]));
+
+	// Phase 3
+	assert(0 == cmp(Posix.Phase3(`.`), cast(string[])[]));
+	assert(0 == cmp(Win__.Phase3(`.`), cast(string[])[]));
+
+	assert(0 == cmp(Posix.Phase3(`./`), cast(string[])[]));
+	assert(0 == cmp(Win__.Phase3(`.\`), cast(string[])[]));
+
+	assert(0 == cmp(Posix.Phase3(`./.`), cast(string[])[]));
+	assert(0 == cmp(Win__.Phase3(`.\.`), cast(string[])[]));
+
+	assert(0 == cmp(Posix.Phase3(`././`), cast(string[])[]));
+	assert(0 == cmp(Win__.Phase3(`.\.\`), cast(string[])[]));
+
+	assert(0 == cmp(Posix.Phase3(`a/./sd/f`), [`a`, `sd`, `f`]));
+	assert(0 == cmp(Win__.Phase3(`a\.\sd\f`), [`a`, `sd`, `f`]));
+
+	assert(0 == cmp(Posix.Phase3(`./a/sd/f/`), [`a`, `sd`, `f`]));
+	assert(0 == cmp(Win__.Phase3(`./a\sd\f\`), [`a`, `sd`, `f`]));
+
+	assert(0 == cmp(Posix.Phase3(`a/./././sd/./f`), [`a`, `sd`, `f`]));
+	assert(0 == cmp(Win__.Phase3(`a\.\.\.\sd\.\f`), [`a`, `sd`, `f`]));
 }
 
 ///
