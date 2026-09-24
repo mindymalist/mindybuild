@@ -48,12 +48,16 @@ private template SubRange(Range) {
 			_length = length;
 		}
 
-		bool empty() {
+		bool empty() const {
 			return (_length == 0);
 		}
 
 		auto front() {
 			return _data.front;
+		}
+
+		size_t length() const {
+			return _length;
 		}
 
 		int opCmp(R)(R other) const {
@@ -96,6 +100,16 @@ template RelativePathNormalizer(Platform platform) {
 		}
 
 		public {
+			char back() const @system {
+				const c = _data.ptr[-1 + _data.length];
+				static if (platform == Platform.windows) {
+					if (c == '/') {
+						return '\\';
+					}
+				}
+				return c;
+			}
+
 			bool empty() const {
 				return (_data.length == 0);
 			}
@@ -110,8 +124,15 @@ template RelativePathNormalizer(Platform platform) {
 				return c;
 			}
 
-			void popFront() @system
-			in (!empty) {
+			size_t length() const {
+				return _data.length;
+			}
+
+			void popBack() @system {
+				_data = _data.ptr[0 .. (-1 + _data.length)];
+			}
+
+			void popFront() @system {
 				_data = _data.ptr[1 .. _data.length];
 			}
 
@@ -137,12 +158,39 @@ template RelativePathNormalizer(Platform platform) {
 		}
 
 		public {
+			char back() const @system {
+				return _data.back;
+			}
+
 			bool empty() const {
 				return _data.empty;
 			}
 
 			char front() const @system {
 				return _data.front;
+			}
+
+			size_t length() @trusted {
+				size_t result = 0;
+				for (auto rest = this.save; !rest.empty; rest.popFront()) {
+					++result;
+				}
+				return result;
+			}
+
+			void popBack() @system {
+				const prevWasDirectorySeparator = (_data.back == directorySeparator);
+
+				_data.popBack();
+
+				if (prevWasDirectorySeparator) {
+					while (!_data.empty) {
+						if (_data.back != directorySeparator) {
+							break;
+						}
+						_data.popBack();
+					}
+				}
 			}
 
 			void popFront() @system {
@@ -169,15 +217,16 @@ template RelativePathNormalizer(Platform platform) {
 	struct Phase2 {
 		private {
 			Phase1 _data;
-			size_t _nextSeparator;
+			size_t _nextFrontSeparator;
+			size_t _nextBackSeparator;
 		}
 
 	@safe pure nothrow @nogc:
 
 		public this(Phase1 data) @trusted {
 			_data = data;
-			_nextSeparator = 0;
 			this.loadFront();
+			this.loadBack();
 		}
 
 		public this(str data) {
@@ -185,21 +234,52 @@ template RelativePathNormalizer(Platform platform) {
 		}
 
 		public {
+			SubRange!Phase1 back() @trusted {
+				size_t offset = -_nextBackSeparator + _data.length;
+				auto clone = _data.save;
+				for (size_t n = 0; n < offset; ++n) {
+					clone.popFront();
+				}
+				return SubRange!Phase1(clone, _nextBackSeparator);
+			}
+
 			bool empty() const {
-				return (_nextSeparator == 0);
+				return _data.empty;
 			}
 
 			SubRange!Phase1 front() const {
-				return SubRange!Phase1(_data, _nextSeparator);
+				return SubRange!Phase1(_data, _nextFrontSeparator);
+			}
+
+			size_t length() @trusted {
+				size_t result = 0;
+				for (auto rest = this.save; !rest.empty; rest.popFront()) {
+					++result;
+				}
+				return result;
+			}
+
+			void popBack() @system {
+				for (typeof(_nextBackSeparator) n = 0; n < _nextBackSeparator; ++n) {
+					_data.popBack();
+				}
+
+				if (_data.empty) {
+					return;
+				}
+
+				// pop separator, too
+				_data.popBack();
+
+				this.loadBack();
 			}
 
 			void popFront() @system {
-				for (typeof(_nextSeparator) n = 0; n < _nextSeparator; ++n) {
+				for (typeof(_nextFrontSeparator) n = 0; n < _nextFrontSeparator; ++n) {
 					_data.popFront();
 				}
 
 				if (_data.empty) {
-					_nextSeparator = 0;
 					return;
 				}
 
@@ -209,22 +289,37 @@ template RelativePathNormalizer(Platform platform) {
 				this.loadFront();
 			}
 
-			private void loadFront() @trusted {
+			typeof(this) save() {
+				return this;
+			}
+		}
+
+		private {
+			void loadBack() @trusted {
 				size_t n = 0;
-				foreach (c; _data.save) {
+				foreach_reverse (c; _data.save) {
 					if (c == directorySeparator) {
-						_nextSeparator = n;
+						_nextBackSeparator = n;
 						return;
 					}
 
 					++n;
 				}
-				_nextSeparator = n;
+				_nextBackSeparator = n;
 			}
+		}
 
-			typeof(this) save() {
-				return this;
+		void loadFront() @trusted {
+			size_t n = 0;
+			foreach (c; _data.save) {
+				if (c == directorySeparator) {
+					_nextFrontSeparator = n;
+					return;
+				}
+
+				++n;
 			}
+			_nextFrontSeparator = n;
 		}
 	}
 }
@@ -235,6 +330,7 @@ template RelativePathNormalizer(Platform platform) {
 	alias Posix = RelativePathNormalizer!(Platform.posix);
 	alias Win__ = RelativePathNormalizer!(Platform.windows);
 
+	// Phase 0
 	assert(0 == cmp(Posix.Phase0(`a/sd/f`), `a/sd/f`));
 	assert(0 == cmp(Posix.Phase0(`a/sd/f/`), `a/sd/f/`));
 	assert(0 == cmp(Posix.Phase0(`a\sd/f/`), `a\sd/f/`));
@@ -242,13 +338,23 @@ template RelativePathNormalizer(Platform platform) {
 	assert(0 == cmp(Win__.Phase0(`a\sd\f`), `a\sd\f`));
 	assert(0 == cmp(Win__.Phase0(`a/sd\f`), `a\sd\f`));
 
+	// Phase 1
 	assert(0 == cmp(Posix.Phase1(`a//sd///f`), `a/sd/f`));
 	assert(0 == cmp(Win__.Phase1(`a//sd///f`), `a\sd\f`));
 	assert(0 == cmp(Win__.Phase1(`a\sd\\f\\`), `a\sd\f\`));
+
 	assert(0 == cmp(Posix.Phase1(`a\sd\\f\\`), `a\sd\\f\\`));
+
+	// Phase 2
+	assert(0 == cmp(Posix.Phase2(`a`), [`a`]));
+	assert(0 == cmp(Win__.Phase2(`a`), [`a`]));
+
+	assert(0 == cmp(Posix.Phase2(`a/`), [`a`]));
+	assert(0 == cmp(Win__.Phase2(`a\`), [`a`]));
 
 	assert(0 == cmp(Posix.Phase2(`a/sd/f`), [`a`, `sd`, `f`]));
 	assert(0 == cmp(Win__.Phase2(`a\sd\f`), [`a`, `sd`, `f`]));
+
 	assert(0 == cmp(Posix.Phase2(`a/sd/f/`), [`a`, `sd`, `f`]));
 	assert(0 == cmp(Win__.Phase2(`a\sd\f\`), [`a`, `sd`, `f`]));
 }
