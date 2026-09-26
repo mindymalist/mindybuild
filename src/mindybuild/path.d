@@ -379,7 +379,7 @@ template RelativePathNormalizer(Platform platform) {
 					return;
 				}
 			}
-			
+
 			void loadFront() @system {
 				while (!_data.empty) {
 					if ((_data.front.length == 1) && (_data.front.front == '.')) {
@@ -389,6 +389,117 @@ template RelativePathNormalizer(Platform platform) {
 
 					return;
 				}
+			}
+		}
+	}
+
+	struct Phase4 {
+		private {
+			Phase3 _data;
+		}
+
+	@safe pure nothrow @nogc:
+
+		public this(Phase3 data) @trusted {
+			_data = data;
+			this.loadBack();
+		}
+
+		public this(str data) {
+			this(data.Phase0.Phase1.Phase2.Phase3);
+		}
+
+		public {
+			SubRange!Phase1 back() @system {
+				return _data.back;
+			}
+
+			bool empty() const {
+				return _data.empty;
+			}
+
+			void popBack() @system {
+				_data.popBack();
+				this.loadBack();
+			}
+		}
+
+		private {
+			void loadBack() @system {
+				while (!_data.empty) {
+					size_t toPop = 0;
+
+					for (auto iterator = _data.save; !iterator.empty; iterator.popBack()) {
+						if (!isDotDot(iterator.back)) {
+							break;
+						}
+						++toPop;
+					}
+
+					toPop += toPop;
+					auto bak = _data;
+					for (size_t n = 0; n < toPop; ++n) {
+						if (_data.empty) {
+							_data = bak;
+							return;
+						}
+						bak = _data;
+						_data.popBack();
+					}
+
+					return;
+				}
+			}
+
+			static bool isDotDot(SubRange!Phase1 dir) @system {
+				if (dir.empty) {
+					return false;
+				}
+				if (dir.front != '.') {
+					return false;
+				}
+				dir.popFront();
+				if (dir.empty) {
+					return false;
+				}
+				if (dir.front != '.') {
+					return false;
+				}
+				dir.popFront();
+				if (!dir.empty) {
+					return false;
+				}
+				return true;
+			}
+		}
+	}
+
+	struct Phase5 {
+		private {
+			Phase4 _data;
+		}
+
+	@safe pure nothrow @nogc:
+
+		public this(Phase4 data) @trusted {
+			_data = data;
+		}
+
+		public this(str data) {
+			this(data.Phase0.Phase1.Phase2.Phase3.Phase4);
+		}
+
+		public {
+			auto front() @system {
+				return _data.back;
+			}
+
+			bool empty() const {
+				return _data.empty;
+			}
+
+			void popFront() @system {
+				_data.popBack();
 			}
 		}
 	}
@@ -449,6 +560,14 @@ template RelativePathNormalizer(Platform platform) {
 
 	assert(0 == cmp(Posix.Phase3(`a/./././sd/./f`), [`a`, `sd`, `f`]));
 	assert(0 == cmp(Win__.Phase3(`a\.\.\.\sd\.\f`), [`a`, `sd`, `f`]));
+
+	// Phase 4+5
+	assert(0 == cmp(Posix.Phase5(`a/sd/../f`), [`f`, `a`]));
+	assert(0 == cmp(Win__.Phase5(`a\sd\..\f`), [`f`, `a`]));
+	assert(0 == cmp(Posix.Phase5(`a/./././sd/../f`), [`f`, `a`]));
+	assert(0 == cmp(Win__.Phase5(`a\.\.\.\sd\..\f`), [`f`, `a`]));
+	assert(0 == cmp(Posix.Phase5(`a/../z/0/../sd/../../f`), [`f`]));
+	assert(0 == cmp(Win__.Phase5(`a\..\z\0\..\sd\..\..\f`), [`f`]));
 }
 
 ///
