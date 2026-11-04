@@ -429,3 +429,84 @@ bool isStaticLibraryFile(str filename) {
 bool isDynamicLibraryFile(str filename) {
 	return Conventions.libraryDynamicFileExtensions.contains(fileExtensionOf(filename));
 }
+
+str pathSpliceTail(ref str path) @trusted {
+	foreach_reverse (idx, c; path) {
+		if (c.isDirSeparator) {
+			const result = path.ptr[(idx + 1) .. path.length];
+			path = path.ptr[0 .. idx];
+			return result;
+		}
+	}
+
+	const result = path;
+	path = null;
+	return result;
+}
+
+@safe unittest {
+	str s0 = "foo/bar";
+	assert(pathSpliceTail(s0) == "bar");
+	assert(s0 == "foo");
+	assert(pathSpliceTail(s0) == "foo");
+	assert(s0 == "");
+
+	str s1 = "foo/bar/foobar";
+	assert(pathSpliceTail(s1) == "foobar");
+	assert(s1 == "foo/bar");
+	assert(pathSpliceTail(s1) == "bar");
+	assert(s1 == "foo");
+
+	str s2 = "";
+	assert(pathSpliceTail(s2) == "");
+	assert(s2 == "");
+
+	str s3 = "/";
+	assert(pathSpliceTail(s3) == "");
+	assert(s3 == "");
+}
+
+bool determineModuleFileImportRoot(str[] identifiers, str path, out str result) {
+	assert(identifiers.length >= 1);
+
+	const bn = baseName!(CaseSensitive.no)(path, ".d");
+	if (bn != identifiers[$ - 1]) {
+		return false;
+	}
+	identifiers = identifiers[0 .. ($ - 1)];
+
+	auto p = pathSpliceTail(path);
+	while ((path !is null) && (identifiers.length > 0)) {
+		p = pathSpliceTail(path);
+		if (p != identifiers[$ - 1]) {
+			return false;
+		}
+
+		identifiers = identifiers[0 .. ($ - 1)];
+	}
+
+	if (identifiers.length > 0) {
+		return false;
+	}
+
+	result = path;
+	return true;
+}
+
+@safe unittest {
+	str s;
+	assert(determineModuleFileImportRoot(["foo", "bar"], "foo/bar.d", s));
+	assert(s == "");
+
+	assert(determineModuleFileImportRoot(["foo", "bar"], "src/foo/bar.d", s));
+	assert(s == "src");
+
+	assert(determineModuleFileImportRoot(["bar"], "src/bar.d", s));
+	assert(s == "src");
+
+	assert(determineModuleFileImportRoot(["bar"], "bar.d", s));
+	assert(s == "");
+
+	assert(!determineModuleFileImportRoot(["foo", "foo"], "src/foo.d", s));
+	assert(!determineModuleFileImportRoot(["foo", "foo", "foo"], "foo/foo.d", s));
+}
