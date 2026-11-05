@@ -261,51 +261,31 @@ BuildUnit collectBuildUnit(string path) {
 
 	result.name = path.asAbsolutePath.asNormalizedPath.array.baseName;
 
-	auto sourceFiles = appender!(str[]);
-	auto importDirs = appender!(str[]);
-	auto stringDirs = appender!(str[]);
+	auto sourceFiles = HashSet!str();
+	auto importDirs = HashSet!str();
+	auto stringDirs = HashSet!str();
 	collectFilesByPurpose(
 		path, sourceFiles, importDirs, stringDirs
 	);
 
-	result.paths.input.source = sourceFiles.data;
-	result.paths.input.import_ = importDirs.data;
-	result.paths.input.stringImport = stringDirs.data;
+	result.paths.input.source = sourceFiles.toArray();
+	result.paths.input.import_ = importDirs.toArray();
+	result.paths.input.stringImport = stringDirs.toArray();
 
 	return result;
 }
 
 private void collectFilesByPurpose(
 	string path,
-	ref Appender!(str[]) sourceFiles,
-	ref Appender!(str[]) importDirs,
-	ref Appender!(str[]) stringDirs,
+	ref HashSet!str sourceFiles,
+	ref HashSet!str importDirs,
+	ref HashSet!str stringDirs,
 ) @safe {
 	import std.array : array;
 
-	bool pathAsImportDirAdded = false;
-	void addPathAsImportDir() {
-		if (pathAsImportDirAdded) {
-			return;
-		}
-
-		importDirs ~= path;
-		pathAsImportDirAdded = true;
-	}
-
-	bool pathAsStringImportDirAdded = false;
-	void addPathAsStringImportDir() {
-		if (pathAsStringImportDirAdded) {
-			return;
-		}
-
-		stringDirs ~= path;
-		pathAsStringImportDirAdded = true;
-	}
-
 	const pathBaseName = path.asAbsolutePath.asNormalizedPath.array.baseName;
 	if (Conventions.stringImportCommonDirectories.contains(pathBaseName)) {
-		addPathAsStringImportDir();
+		stringDirs.ensureAdded(path);
 	}
 
 	() @trusted /* ← DMD < 2.114 */ {
@@ -315,34 +295,46 @@ private void collectFilesByPurpose(
 					if (file.name.isDSourceFile) {
 						string sourceCode = (() @trusted => cast(string) File.read(file.name))();
 						const moduleName = parseModuleName(sourceCode);
+						str importRoot;
+						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)){
+							assert(false, "`-mv` has not been implemented yet.");
+						}
+
+						importDirs.ensureAdded(importRoot);
+						sourceFiles.ensureAdded(file.name);
+						return;
 					}
-					if (file.name.isDSourceFile || file.name.isCSourceFile) {
-						sourceFiles ~= file.name;
-						// TODO: wrong dir
-						addPathAsImportDir();
+					if (file.name.isCSourceFile) {
+						importDirs.ensureAdded(path);
+						sourceFiles.ensureAdded(file.name);
 						return;
 					}
 
-					if (file.name.isDImportFile || file.name.isCIncludeFile) {
-						// TODO: wrong dir
-						addPathAsImportDir();
+					if (file.name.isDImportFile) {
+						string sourceCode = (() @trusted => cast(string) File.read(file.name))();
+						const moduleName = parseModuleName(sourceCode);
+						str importRoot;
+						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)){
+							assert(false, "`-mv` has not been implemented yet.");
+						}
+
+						importDirs.ensureAdded(importRoot);
 						return;
 					}
 
-					if (file.name.isDImportFile || file.name.isCIncludeFile) {
-						// TODO: wrong dir
-						addPathAsImportDir();
+					if (file.name.isCIncludeFile) {
+						importDirs.ensureAdded(path);
 						return;
 					}
 
 					if (Conventions.stringImportDirectorySentinels.contains(file.name)) {
-						addPathAsStringImportDir();
+						stringDirs.ensureAdded(path);
 						return;
 					}
 
 					const fileExt = file.name.extension;
 					if (Conventions.stringImportFileExtensions.contains(fileExt)) {
-						addPathAsStringImportDir();
+						stringDirs.ensureAdded(path);
 						return;
 					}
 
@@ -466,7 +458,7 @@ str pathSpliceTail(ref str path) @trusted {
 	assert(s3 == "");
 }
 
-bool determineModuleFileImportRoot(str[] identifiers, str path, out str result) {
+bool determineModuleFileImportRoot(const(str)[] identifiers, str path, out str result) {
 	assert(identifiers.length >= 1);
 
 	const bn = baseName!(CaseSensitive.no)(path, ".d");
