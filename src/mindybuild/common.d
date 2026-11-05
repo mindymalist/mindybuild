@@ -921,3 +921,157 @@ str[] splitArgsString(str argsString) @safe {
 
 	return result.data;
 }
+
+///
+struct HashSet(TKey) {
+	private {
+		alias Unit = ubyte[0]; // `ubyte` instead of `void` as a regression workaround for D 2.112+
+		Unit[TKey] _data;
+	}
+
+	///
+	public this(TKey[] initialKeys) {
+		foreach (key; initialKeys) {
+			this.add(key);
+		}
+	}
+
+	public @safe {
+		///
+		void add(TKey key) {
+			if (this.contains(key)) {
+				assert(false, "Value is already part of the set.");
+			}
+
+			_data[key] = Unit.init;
+		}
+
+		///
+		bool contains(TKey key) {
+			return ((key in _data) !is null);
+		}
+
+		///
+		void ensureAdded(TKey key) {
+			_data[key] = Unit.init;
+		}
+
+		///
+		void remove(TKey key) {
+			_data.remove(key);
+		}
+
+		///
+		TKey[] toArray() @trusted {
+			return _data.keys;
+		}
+
+		///
+		bool tryAdd(TKey key) {
+			if (this.contains(key)) {
+				return false;
+			}
+
+			_data[key] = Unit.init;
+			return true;
+		}
+	}
+
+	public {
+		///
+		int opApply(scope int delegate(ref TKey) @safe dg) {
+			int result = 0;
+			foreach (item; _data.byKey) {
+				result = dg(item);
+				if (result) {
+					break;
+				}
+			}
+
+			return result;
+		}
+
+		///
+		int opApply(scope int delegate(ref TKey) @system dg) {
+			int result = 0;
+			foreach (item; _data.byKey) {
+				result = dg(item);
+				if (result) {
+					break;
+				}
+			}
+
+			return result;
+		}
+
+		///
+		void opOpAssign(string op : "~")(TKey value) {
+			this.add(value);
+		}
+	}
+}
+
+@safe unittest {
+	auto set = HashSet!string();
+	assert(!set.contains("foo"));
+
+	set.add("foo");
+	assert(set.contains("foo"));
+
+	set.remove("foo");
+	assert(!set.contains("foo"));
+
+	assert(!set.contains("bar"));
+
+	set.add("bar");
+	assert(set.contains("bar"));
+
+	set.remove("bar");
+	assert(!set.contains("bar"));
+
+	set.add("foo");
+	set.add("bar");
+	assert(set.contains("foo"));
+	assert(set.contains("bar"));
+	set.remove("bar");
+	assert(set.contains("foo"));
+	assert(!set.contains("bar"));
+}
+
+@safe unittest {
+	auto set = HashSet!int();
+
+	set.add(16);
+	set.add(32);
+	set.add(64);
+
+	bool found16 = false;
+	bool found32 = false;
+	bool found64 = false;
+
+	foreach (key; set) {
+		switch (key) {
+			case 16:
+				assert(!found16);
+				found16 = true;
+				break;
+
+			case 32:
+				assert(!found32);
+				found32 = true;
+				break;
+
+			case 64:
+				assert(!found64);
+				found64 = true;
+				break;
+
+			default:
+				assert(false);
+		}
+	}
+
+	assert(found16);
+	assert(found32);
+	assert(found64);
+}
