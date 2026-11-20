@@ -852,7 +852,7 @@ bool startsWith(T)(const(T)[] haystack, const(T)[] needle) {
 const(char)[] toLower(const(char)[] data) @safe {
 	import std.ascii : isUpper, toLower;
 
-	static string convert(const(char)[] data) @trusted {
+	static const(char)[] convert(const(char)[] data) @trusted {
 		auto result = new char[](data.length);
 		foreach (idx, c; data) {
 			result.ptr[idx] = c.toLower;
