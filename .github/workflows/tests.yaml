@@ -17,14 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run buildscript in container
+      - name: Run build script in container
         run: |
           podman run \
             --init \
             -v '.':'/opt/mindybuild' \
             -w /opt/mindybuild \
             ${{ matrix.container-image }} \
-            ./build.sh
+            ./build.sh \
+            && \
+              ./bin/mindybuild --help
 
   test:
     name: Run unit tests
