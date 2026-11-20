@@ -815,6 +815,78 @@ ptrdiff_t indexOf(H, N)(H haystack, N needle) {
 	return -1;
 }
 
+@safe unittest {
+	assert("asdf".indexOf('a') == 0);
+	assert("asdf".indexOf('s') == 1);
+	assert("asdf".indexOf('d') == 2);
+	assert("asdf".indexOf('f') == 3);
+	assert("asdf".indexOf('j') < 0);
+}
+
+///
+bool startsWith(T)(const(T)[] haystack, const(T)[] needle) {
+	if (needle.length > haystack.length) {
+		return false;
+	}
+
+	foreach (idx, c; needle) {
+		const h = (() @trusted => haystack.ptr[idx])();
+		if (c != h) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+@safe unittest {
+	assert("asdf".startsWith("a"));
+	assert("asdf".startsWith("as"));
+	assert("asdf".startsWith("asd"));
+	assert("asdf".startsWith("asdf"));
+	assert(!"asdf".startsWith("asdfj"));
+	assert(!"asdf".startsWith("sdf"));
+}
+
+///
+const(char)[] toLower(const(char)[] data) @safe {
+	import std.ascii : isUpper, toLower;
+
+	static string convert(const(char)[] data) @trusted {
+		auto result = new char[](data.length);
+		foreach (idx, c; data) {
+			result.ptr[idx] = c.toLower;
+		}
+		return result;
+	}
+
+	foreach (c; data) {
+		if (c.isUpper) {
+			return convert(data);
+		}
+	}
+	return data;
+}
+
+///
+string toLower(string data) @trusted {
+	return cast(string) toLower(cast(const(char)[]) data);
+}
+
+@safe unittest {
+	string s = "asdf";
+	assert(s.toLower is s);
+
+	assert("ASDF".toLower == "asdf");
+	assert("AsdF".toLower == "asdf");
+	assert("asdF".toLower == "asdf");
+	assert("asDF".toLower == "asdf");
+
+	assert("as_DF".toLower == "as_df");
+
+	assert("JKLÖ".toLower == "jklÖ");
+}
+
 ///
 void sliceOffLast(T)(ref T[] data) @trusted pure nothrow @nogc {
 	version (LDC) {
