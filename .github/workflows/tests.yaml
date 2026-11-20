@@ -1,0 +1,42 @@
+name: Tests
+on:
+  pull_request:
+  push:
+
+jobs:
+  build:
+    name: Build application
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container-image:
+          - "ghcr.io/dlang-dockerized/dmd:latest"
+          - "ghcr.io/dlang-dockerized/ldc:latest"
+          - "ghcr.io/dlang-dockerized/ldc:ltsmaster-trixie"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run buildscript in container
+        run: |
+          podman run \
+            --init \
+            -v '.':'/opt/mindybuild' \
+            -w /opt/mindybuild \
+            ${{ matrix.container-image }} \
+            ./build.sh
+
+  test:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container-image:
+          - "ghcr.io/dlang-dockerized/dmd:latest"
+          - "ghcr.io/dlang-dockerized/ldc:latest"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run tests
+        run: ./test.sh
