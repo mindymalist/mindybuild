@@ -8,6 +8,7 @@ jobs:
     name: Build application
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         container-image:
           - "ghcr.io/dlang-dockerized/dmd:latest"
@@ -32,6 +33,7 @@ jobs:
     name: Run unit tests
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         container-image:
           - "ghcr.io/dlang-dockerized/dmd:latest"
