@@ -1051,7 +1051,7 @@ struct HashSet(TKey) {
 
 	public {
 		///
-		int opApply(scope int delegate(ref TKey) @safe dg) {
+		int opApply(scope int delegate(ref TKey) @safe dg) @safe {
 			int result = 0;
 			foreach (item; _data.byKey) {
 				result = dg(item);
