@@ -25,9 +25,8 @@ import std.stdio : FileHandle = File;
 ///
 int run(FileHandle stderr, string[] args) @safe {
 	try {
-		changeDirectoryToProjectRoot();
-		const recipe = collectBuildRecipe(args);
-		writeMakefile(recipe);
+		auto options = parseOptions(args, stderr);
+		run(options);
 		return 0;
 	}
 	catch (ConfigureException ex) {
@@ -40,9 +39,22 @@ int run(FileHandle stderr, string[] args) @safe {
 	return 1;
 }
 
+///
+void run(DriverOptions options) @safe {
+	changeDirectoryToProjectRoot();
+	throwIfMakefileExists(options);
+	const recipe = collectBuildRecipe(options);
+	writeMakefile(recipe);
+}
+
 immutable struct Conventions {
 	@disable this();
 	@disable this(this);
+
+	// Misc
+	static immutable {
+		auto makefileFilename = "Makefile";
+	}
 
 	// Sentinels
 	static immutable {
@@ -130,19 +142,37 @@ immutable struct Conventions {
 	}
 }
 
+struct DriverOptions {
+	FileHandle log;
+	bool force = false;
+	bool verbose = false;
+
+	string[string] flagsEnable;
+	string[string] flagsWith;
+}
+
 struct Recipe {
 	str name;
 	OutputPaths paths;
 
 	BuildUnit[] units = null;
 	str dCompiler;
+	str[] dflags;
+	str[] lflags;
 }
 
 struct BuildUnit {
-	str name;
+	enum Type {
+		object,
+		executable,
+		libraryStatic,
+		libraryShared,
+	}
 
-	str[] dflags;
-	str[] lflags;
+	str name;
+	Type type;
+
+	str[] compilerFlags;
 
 	BuildPaths paths;
 	str dCompiler;
@@ -187,6 +217,61 @@ final class ConfigureException : Exception {
 
 @safe:
 
+DriverOptions parseOptions(string[] args, FileHandle log) {
+	auto options = DriverOptions();
+
+	options.log = log;
+
+	static string[2] parseOption(string option) {
+		const idxSep = option.indexOf('=');
+		string[2] result;
+		if (idxSep < 0) {
+			result = [option.toLower, null];
+		}
+		else {
+			result = [
+				option[0 .. idxSep],
+				option[(idxSep + 1) .. $],
+			];
+		}
+
+		return result;
+	}
+
+	foreach (arg; args) {
+		if (arg.startsWith("--enable-")) {
+			const rawPair = arg["--enable-".length .. $];
+			const optionPair = parseOption(rawPair);
+			options.flagsEnable[optionPair[0]] = optionPair[1];
+			continue;
+		}
+		if (arg.startsWith("--with-")) {
+			const rawPair = arg["--with-".length .. $];
+			const optionPair = parseOption(rawPair);
+			options.flagsWith[optionPair[0]] = optionPair[1];
+			continue;
+		}
+
+		switch (arg) {
+			case "--force":
+			case "-f":
+				options.force = true;
+				break;
+
+			case "--verbose":
+			case "-v":
+				options.verbose = true;
+				break;
+
+			default:
+				throw new ConfigureException("Unrecognized option `" ~ arg ~ "`.");
+				break;
+		}
+	}
+
+	return options;
+}
+
 void changeDirectoryToProjectRoot() {
 	str projectRoot;
 	try {
@@ -219,7 +304,17 @@ str determineProjectRoot() {
 	return projectRoot;
 }
 
-Recipe collectBuildRecipe(const str[] args) {
+void throwIfMakefileExists(const DriverOptions options) {
+	if (options.force) {
+		return;
+	}
+
+	if (File.exists(Conventions.makefileFilename)) {
+		throw new ConfigureException("Makefile already exists; use `--force` to overwrite.");
+	}
+}
+
+Recipe collectBuildRecipe(const DriverOptions options) {
 	auto result = Recipe();
 
 	const db = loadDatabase();
