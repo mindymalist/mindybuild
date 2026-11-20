@@ -1064,19 +1064,6 @@ struct HashSet(TKey) {
 		}
 
 		///
-		int opApply(scope int delegate(ref TKey) @system dg) {
-			int result = 0;
-			foreach (item; _data.byKey) {
-				result = dg(item);
-				if (result) {
-					break;
-				}
-			}
-
-			return result;
-		}
-
-		///
 		void opOpAssign(string op : "~")(TKey value) {
 			this.add(value);
 		}
