@@ -391,7 +391,7 @@ private void collectFilesByPurpose(
 						string sourceCode = (() @trusted => cast(string) File.read(file.name))();
 						const moduleName = parseModuleName(sourceCode);
 						str importRoot;
-						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)){
+						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)) {
 							assert(false, "`-mv` has not been implemented yet.");
 						}
 
@@ -409,7 +409,7 @@ private void collectFilesByPurpose(
 						string sourceCode = (() @trusted => cast(string) File.read(file.name))();
 						const moduleName = parseModuleName(sourceCode);
 						str importRoot;
-						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)){
+						if (!determineModuleFileImportRoot(moduleName, file.name, importRoot)) {
 							assert(false, "`-mv` has not been implemented yet.");
 						}
 
