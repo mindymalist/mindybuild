@@ -459,7 +459,9 @@ str pathSpliceTail(ref str path) @trusted {
 }
 
 bool determineModuleFileImportRoot(const(str)[] identifiers, str path, out str result) {
-	assert(identifiers.length >= 1);
+	if (identifiers.length < 1) {
+		return false;
+	}
 
 	const bn = baseName!(CaseSensitive.no)(path, ".d");
 	if (bn != identifiers[$ - 1]) {
